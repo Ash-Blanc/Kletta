@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
-import { Resource, Task, SearchFilters } from '../types';
+import { Resource, Task, SearchFilters, KaggleCredentials } from '../types';
 import { 
   FileText, CheckSquare, Layers, Link as LinkIcon, 
   Box, Database, Plus, Search, X, Star, 
   Calendar, Code, Trash2, CheckCircle2, Circle, 
-  Clock, GripVertical, ChevronDown, ChevronUp
+  Clock, GripVertical, ChevronDown, ChevronUp, Terminal, Loader2
 } from 'lucide-react';
 import { clsx } from 'clsx';
+import { searchCompetitions, searchDatasets, fetchLeaderboard, fetchDatasetFiles } from '../services/kaggleService';
 
 interface SidebarRightProps {
   resources: Resource[];
@@ -16,6 +17,7 @@ interface SidebarRightProps {
   onUpdateTask: (id: string, updates: Partial<Task>) => void;
   onDeleteTask: (id: string) => void;
   onDeleteResource: (id: string) => void;
+  kaggleCreds: KaggleCredentials | null;
   className?: string;
 }
 
@@ -27,6 +29,7 @@ const SidebarRight: React.FC<SidebarRightProps> = ({
   onUpdateTask,
   onDeleteTask,
   onDeleteResource,
+  kaggleCreds,
   className 
 }) => {
   const [activeFilter, setActiveFilter] = useState<'all' | 'paper' | 'library' | 'dataset'>('all');
@@ -41,6 +44,10 @@ const SidebarRight: React.FC<SidebarRightProps> = ({
   const [language, setLanguage] = useState('');
   const [minStars, setMinStars] = useState('');
   const [lastUpdated, setLastUpdated] = useState('');
+
+  // File Listing State
+  const [datasetFiles, setDatasetFiles] = useState<Record<string, any[]>>({});
+  const [loadingFiles, setLoadingFiles] = useState<string | null>(null);
 
   const filteredResources = resources.filter(res => 
     activeFilter === 'all' || res.type === activeFilter
@@ -96,6 +103,33 @@ const SidebarRight: React.FC<SidebarRightProps> = ({
       task.status === 'in-progress' ? 'completed' : 'pending';
     
     onUpdateTask(task.id, { status: nextStatus });
+  };
+
+  const handleViewFiles = async (res: Resource) => {
+    if (datasetFiles[res.id]) {
+        // Toggle off if already loaded
+        const next = { ...datasetFiles };
+        delete next[res.id];
+        setDatasetFiles(next);
+        return;
+    }
+
+    if (!res.url || !res.url.includes('datasets/')) return;
+    
+    // Extract ref from URL or use a saved ref if we had one
+    // Usually URL is https://www.kaggle.com/datasets/owner/slug
+    const ref = res.url.split('datasets/')[1];
+    if (!ref) return;
+
+    setLoadingFiles(res.id);
+    try {
+        const files = await fetchDatasetFiles(ref, kaggleCreds);
+        setDatasetFiles(prev => ({ ...prev, [res.id]: files }));
+    } catch (e) {
+        console.error("Failed to fetch files:", e);
+    } finally {
+        setLoadingFiles(null);
+    }
   };
 
   const completedTasks = tasks.filter(t => t.status === 'completed').length;
@@ -331,10 +365,41 @@ const SidebarRight: React.FC<SidebarRightProps> = ({
                       </div>
                   )}
 
+                  {/* File List for Datasets */}
+                  {datasetFiles[res.id] && (
+                      <div className="mb-3 bg-black/40 rounded-lg border border-surfaceHighlight/50 p-2 space-y-1.5 animate-in fade-in zoom-in-95">
+                          <div className="flex items-center gap-2 text-[10px] font-bold text-accent uppercase px-1">
+                              <Terminal size={10} />
+                              <span>Dataset Files</span>
+                          </div>
+                          <div className="max-h-32 overflow-y-auto no-scrollbar space-y-1">
+                              {datasetFiles[res.id].map((file, idx) => (
+                                  <div key={idx} className="flex justify-between items-center text-[10px] text-textMuted px-1 hover:text-text transition-colors">
+                                      <span className="truncate pr-4">{file.name}</span>
+                                      <span className="font-mono opacity-50 shrink-0">{file.size}</span>
+                                  </div>
+                              ))}
+                          </div>
+                      </div>
+                  )}
+
                   <div className="flex flex-wrap gap-2 items-center">
                     <span className={clsx("text-[9px] px-2 py-0.5 rounded-full border uppercase tracking-widest font-black shadow-sm", getBadgeColor(res.type))}>
                       {res.type}
                     </span>
+                    
+                    {res.type === 'dataset' && (
+                        <button 
+                            onClick={(e) => { e.preventDefault(); handleViewFiles(res); }}
+                            className={clsx(
+                                "text-[9px] px-2 py-0.5 rounded-full border border-accent/30 text-accent font-bold uppercase transition-all flex items-center gap-1",
+                                datasetFiles[res.id] ? "bg-accent text-white" : "hover:bg-accent/10"
+                            )}
+                        >
+                            {loadingFiles === res.id ? <Loader2 size={8} className="animate-spin" /> : <Terminal size={8} />}
+                            {datasetFiles[res.id] ? "Hide Files" : "View Files"}
+                        </button>
+                    )}
                     
                     {/* Metadata Badges */}
                     {res.metadata?.stars && (

@@ -1,30 +1,30 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { Message, AgentType, Resource, LLMKeys, AIProvider, SearchFilters, Competition, Task, KaggleCredentials } from '../types';
-import { searchCompetitions, searchDatasets } from './kaggleService';
+import { Message, AgentType, Resource, LLMKeys, AIProvider, SearchFilters, Competition, Task, KaggleCredentials, AgentConfig, MCPServer, MemoryBlock } from '../types';
+import { searchCompetitions, searchDatasets, fetchLeaderboard, fetchDatasetFiles } from './kaggleService';
 import { BASE_KLETTA_INSTRUCTION, DEFAULT_AGENT_PROMPTS } from './agentPrompts';
+import { callRemoteMCP } from './mcpService';
 
 const SYSTEM_INSTRUCTION = `
-You are "Kletta", a sophisticated AI agent workspace designed to win Kaggle competitions.
-You are powered by "Letta", allowing you to have persistent memory of the competition state, data quirks, and experiment history.
+You are "Kletta", a sophisticated AI agent workspace designed to win modern "Featured" Kaggle competitions.
+You are powered by "Letta", providing persistent memory of the competition state and research history.
 
 You consist of specialized sub-agents. Adopt the persona of the most relevant agent:
 
 AGENTS:
-1. Scout (@scout): Competition analyst. Reads rules, understands metrics, analyzes datasets. Proactively adds tasks related to data understanding.
-2. Researcher (@researcher): Academic expert. Finds SOTA papers (arXiv), GitHub repos, and libraries. Adds found resources to the workspace.
-3. Strategist (@strategist): Project lead. Prioritizes tasks, manages time/submissions. Responsible for the overall roadmap and initialization.
-4. Coder (@coder): Python expert. Writes PyTorch/TensorFlow/XGBoost code, pipelines.
-5. Experimenter (@experimenter): MLOps. Runs training, tracks CV vs LB scores.
-6. Analyst (@analyst): Data Scientist. EDA, feature importance, error analysis.
-7. Ensemble (@ensemble): Meta-learner. Stacking/blending strategies.
+1. Scout (@scout): Challenge deconstructor. Analyzes core constraints and specialized metrics. Proactively adds tasks for problem framing.
+2. Researcher (@researcher): SOTA specialist. Scours arXiv and GitHub for cutting-edge techniques and architectures. 
+3. Strategist (@strategist): Solution architect. Manages the high-level roadmap and "Zero-to-One" implementation.
+4. Coder (@coder): Systems Engineer. Writes robust, optimized implementations of SOTA models and research pipelines.
+5. Experimenter (@experimenter): Performance optimizer. Conducts ablation studies and tracks scaling behaviors.
+6. Analyst (@analyst): Failure mode analyst. Performs deep error analysis on model predictions and edge cases.
+7. Ensemble (@ensemble): Diversity meta-learner. Merges fundamentally different architectures.
 
 FORMATTING RULES:
 - Use Markdown.
-- Start responses with the persona name if switching context (e.g., "🧬 **Researcher:**").
-- Be high-performance oriented. Focus on CV improvement, Leaderboard (LB) climbing, and novel techniques.
-- When citing papers or code, provide links if available from search.
-- **IMPORTANT**: When writing code (especially as @coder), ALWAYS use labeled code blocks (e.g., \`\`\`python ... \`\`\`). Do not output plain text code.
-- **BE CONCISE**: Minimize conversational fluff. Focus on insights and actions.
+- Start responses with the persona name (e.g., "🧬 **Researcher:**").
+- Be high-performance oriented. Focus on SOTA research, architecture design, and metric optimization.
+- Forget traditional ML fluff (standard EDA, generic FE). Focus on the core algorithmic breakthrough.
+- **IMPORTANT**: When writing code, ALWAYS use labeled code blocks.
 
 WORKSPACE CONTROL:
 You can autonomously update the user's workspace by including these blocks at the END of your message:
@@ -32,11 +32,12 @@ You can autonomously update the user's workspace by including these blocks at th
 - To add a task: [ADD_TASK: "Specific objective description"]
 - To remove a task: [REMOVE_TASK: "Specific objective description"]
 - To reset the entire plan: [CLEAR_PLAN]
+- To update persistent memory: [UPDATE_MEMORY: {"label": "Key Insight Name", "value": "Detailed discovery or state update"}]
 
 MEMORY & CONTEXT:
-- You remember the competition details, current CV scores, and tried techniques.
-- You have access to the resources and tasks listed in the context below. Use them to inform your suggestions.
-- **INITIALIZATION**: If you are starting a new competition, immediately use [ADD_TASK] to create an initial roadmap (EDA, Baseline, Cross-Validation setup).
+- You remember the competition details, current scores, and research findings.
+- You have access to the resources, tasks, and memory blocks listed in the context below.
+- **INITIALIZATION**: If you are starting a new competition, immediately use [ADD_TASK] to create a research-heavy roadmap (Literature Review, SOTA Mapping, Core Architecture Design).
 `;
 
 const AGENT_MENTIONS: Record<string, AgentType> = {
@@ -51,7 +52,7 @@ const AGENT_MENTIONS: Record<string, AgentType> = {
 
 // --- Context Helper ---
 
-const buildSystemPrompt = (baseSystem: string, competition?: Competition, resources: Resource[] = [], tasks: Task[] = []): string => {
+const buildSystemPrompt = (baseSystem: string, competition?: Competition, resources: Resource[] = [], tasks: Task[] = [], memory: MemoryBlock[] = []): string => {
   if (!competition) return baseSystem;
 
   const contextBlock = `
@@ -67,6 +68,9 @@ ${resources.length > 0 ? resources.map(r => `- [${r.type.toUpperCase()}] ${r.tit
 
 === ACTIVE PLAN (TASKS) ===
 ${tasks.length > 0 ? tasks.map(t => `- [${t.status.toUpperCase()}] ${t.title}`).join('\n') : 'No tasks in plan yet.'}
+
+=== PERSISTENT MEMORY ===
+${memory.length > 0 ? memory.map(m => `- [${m.label}] ${m.value} (Updated: ${m.lastUpdated})`).join('\n') : 'No persistent memory blocks yet.'}
 ===================================
 
 Use this context to answer questions immediately. Do NOT ask the user for information already provided above.
@@ -76,7 +80,7 @@ Use this context to answer questions immediately. Do NOT ask the user for inform
 
 // --- Providers ---
 
-async function callGemini(history: Message[], prompt: string, apiKey: string, competition?: Competition, resources: Resource[] = [], tasks: Task[] = [], kaggleCreds?: KaggleCredentials | null, baseSystem: string = SYSTEM_INSTRUCTION): Promise<string> {
+async function callGemini(history: Message[], prompt: string, apiKey: string, competition?: Competition, resources: Resource[] = [], tasks: Task[] = [], kaggleCreds?: KaggleCredentials | null, baseSystem: string = SYSTEM_INSTRUCTION, agentConfig?: AgentConfig, mcpServers: MCPServer[] = [], memory: MemoryBlock[] = []): Promise<string> {
     const ai = new GoogleGenAI({ apiKey });
     // Using flash for general chat to avoid limits, user can tweak in future
     const model = 'gemini-2.0-flash-exp'; 
@@ -86,36 +90,110 @@ async function callGemini(history: Message[], prompt: string, apiKey: string, co
       parts: [{ text: msg.content }],
     }));
 
-    const systemInstruction = buildSystemPrompt(baseSystem, competition, resources, tasks);
+    const systemInstruction = buildSystemPrompt(baseSystem, competition, resources, tasks, memory);
+
+    // Dynamic Tool Construction based on Agent Config
+    const functionDeclarations: any[] = [
+        {
+            name: "search_kaggle_competitions",
+            description: "Search for Kaggle competitions by keyword or query.",
+            parameters: {
+                type: Type.OBJECT,
+                properties: {
+                    query: { type: Type.STRING, description: "The search query (e.g. 'titanic', 'image classification')." }
+                },
+                required: ["query"]
+            }
+        },
+        {
+            name: "search_kaggle_datasets",
+            description: "Search for Kaggle datasets by keyword or query.",
+            parameters: {
+                type: Type.OBJECT,
+                properties: {
+                    query: { type: Type.STRING, description: "The search query (e.g. 'housing prices', 'nlp datasets')." }
+                },
+                required: ["query"]
+            }
+        },
+        {
+            name: "get_competition_leaderboard",
+            description: "Retrieve the current public leaderboard for a competition.",
+            parameters: {
+                type: Type.OBJECT,
+                properties: {
+                    competition_id: { type: Type.STRING, description: "The Kaggle ID (ref) of the competition." }
+                },
+                required: ["competition_id"]
+            }
+        },
+        {
+            name: "list_dataset_files",
+            description: "List the files and their sizes within a specific Kaggle dataset.",
+            parameters: {
+                type: Type.OBJECT,
+                properties: {
+                    dataset_id: { type: Type.STRING, description: "The Kaggle ID (ref) of the dataset (e.g. 'shivamb/netflix-shows')." }
+                },
+                required: ["dataset_id"]
+            }
+        }
+    ];
+
+    // Add MCP tools if configured for this agent
+    const activeServers = mcpServers.filter(s => agentConfig?.mcpIds?.includes(s.id));
+    
+    if (activeServers.length > 0) {
+        // For simplicity, we add the standard package search tools if any MCP is active
+        // In a more advanced version, we would call tools/list on the MCP server first
+        functionDeclarations.push(
+            {
+                name: "package_search_grep",
+                description: "Execute a grep over the source code of a public package.",
+                parameters: {
+                    type: Type.OBJECT,
+                    properties: {
+                        registry_name: { type: Type.STRING, description: "crates_io, golang_proxy, npm, or py_pi" },
+                        package_name: { type: Type.STRING, description: "Name of the package" },
+                        pattern: { type: Type.STRING, description: "Regex pattern" }
+                    },
+                    required: ["registry_name", "package_name", "pattern"]
+                }
+            },
+            {
+                name: "package_search_read_file",
+                description: "Reads exact lines from a source file of a public package.",
+                parameters: {
+                    type: Type.OBJECT,
+                    properties: {
+                        registry_name: { type: Type.STRING },
+                        package_name: { type: Type.STRING },
+                        filename_sha256: { type: Type.STRING },
+                        start_line: { type: Type.NUMBER },
+                        end_line: { type: Type.NUMBER }
+                    },
+                    required: ["registry_name", "package_name", "filename_sha256", "start_line", "end_line"]
+                }
+            },
+            {
+                name: "package_search_hybrid",
+                description: "Searches package source code using semantic understanding.",
+                parameters: {
+                    type: Type.OBJECT,
+                    properties: {
+                        registry_name: { type: Type.STRING },
+                        package_name: { type: Type.STRING },
+                        semantic_queries: { type: Type.ARRAY, items: { type: Type.STRING } }
+                    },
+                    required: ["registry_name", "package_name", "semantic_queries"]
+                }
+            }
+        );
+    }
 
     const tools = [
         { googleSearch: {} },
-        {
-            functionDeclarations: [
-                {
-                    name: "search_kaggle_competitions",
-                    description: "Search for Kaggle competitions by keyword or query.",
-                    parameters: {
-                        type: Type.OBJECT,
-                        properties: {
-                            query: { type: Type.STRING, description: "The search query (e.g. 'titanic', 'image classification')." }
-                        },
-                        required: ["query"]
-                    }
-                },
-                {
-                    name: "search_kaggle_datasets",
-                    description: "Search for Kaggle datasets by keyword or query.",
-                    parameters: {
-                        type: Type.OBJECT,
-                        properties: {
-                            query: { type: Type.STRING, description: "The search query (e.g. 'housing prices', 'nlp datasets')." }
-                        },
-                        required: ["query"]
-                    }
-                }
-            ]
-        }
+        { functionDeclarations }
     ];
 
     const chat = ai.chats.create({
@@ -152,6 +230,45 @@ async function callGemini(history: Message[], prompt: string, apiKey: string, co
                         response: { content: datasets.map(d => ({ title: d.title, url: d.url, summary: d.summary })) }
                     }
                 });
+            } else if (call.name === "get_competition_leaderboard") {
+                const id = (call.args as any).competition_id;
+                const lb = await fetchLeaderboard(id, kaggleCreds || null);
+                toolResults.push({
+                    functionResponse: {
+                        name: "get_competition_leaderboard",
+                        response: { content: lb.slice(0, 20) } // Limit to top 20
+                    }
+                });
+            } else if (call.name === "list_dataset_files") {
+                const id = (call.args as any).dataset_id;
+                const files = await fetchDatasetFiles(id, kaggleCreds || null);
+                toolResults.push({
+                    functionResponse: {
+                        name: "list_dataset_files",
+                        response: { content: files }
+                    }
+                });
+            } else if (call.name.startsWith("package_search_")) {
+                // Find first server that supports package search (currently all active ones)
+                const server = activeServers[0];
+                if (server) {
+                    try {
+                        const mcpResult = await callRemoteMCP(server, call.name, call.args);
+                        toolResults.push({
+                            functionResponse: {
+                                name: call.name,
+                                response: { content: mcpResult }
+                            }
+                        });
+                    } catch (e: any) {
+                        toolResults.push({
+                            functionResponse: {
+                                name: call.name,
+                                response: { error: e.message }
+                            }
+                        });
+                    }
+                }
             }
         }
         
@@ -166,8 +283,8 @@ async function callGemini(history: Message[], prompt: string, apiKey: string, co
     return result.text;
 }
 
-async function callOpenAI(history: Message[], prompt: string, apiKey: string, competition?: Competition, resources: Resource[] = [], tasks: Task[] = [], kaggleCreds?: KaggleCredentials | null, baseSystem: string = SYSTEM_INSTRUCTION): Promise<string> {
-    const systemInstruction = buildSystemPrompt(baseSystem, competition, resources, tasks);
+async function callOpenAI(history: Message[], prompt: string, apiKey: string, competition?: Competition, resources: Resource[] = [], tasks: Task[] = [], kaggleCreds?: KaggleCredentials | null, baseSystem: string = SYSTEM_INSTRUCTION, agentConfig?: AgentConfig, mcpServers: MCPServer[] = [], memory: MemoryBlock[] = []): Promise<string> {
+    const systemInstruction = buildSystemPrompt(baseSystem, competition, resources, tasks, memory);
     const messages = [
         { role: 'system', content: systemInstruction },
         ...history.slice(-10).map(msg => ({
@@ -199,8 +316,8 @@ async function callOpenAI(history: Message[], prompt: string, apiKey: string, co
     return data.choices[0].message.content;
 }
 
-async function callOpenRouter(history: Message[], prompt: string, apiKey: string, competition?: Competition, resources: Resource[] = [], tasks: Task[] = [], kaggleCreds?: KaggleCredentials | null, baseSystem: string = SYSTEM_INSTRUCTION): Promise<string> {
-    const systemInstruction = buildSystemPrompt(baseSystem, competition, resources, tasks);
+async function callOpenRouter(history: Message[], prompt: string, apiKey: string, competition?: Competition, resources: Resource[] = [], tasks: Task[] = [], kaggleCreds?: KaggleCredentials | null, baseSystem: string = SYSTEM_INSTRUCTION, agentConfig?: AgentConfig, mcpServers: MCPServer[] = [], memory: MemoryBlock[] = []): Promise<string> {
+    const systemInstruction = buildSystemPrompt(baseSystem, competition, resources, tasks, memory);
     const messages = [
         { role: 'system', content: systemInstruction },
         ...history.slice(-10).map(msg => ({
@@ -233,8 +350,8 @@ async function callOpenRouter(history: Message[], prompt: string, apiKey: string
     return data.choices[0].message.content;
 }
 
-async function callCerebras(history: Message[], prompt: string, apiKey: string, competition?: Competition, resources: Resource[] = [], tasks: Task[] = [], kaggleCreds?: KaggleCredentials | null, baseSystem: string = SYSTEM_INSTRUCTION): Promise<string> {
-    const systemInstruction = buildSystemPrompt(baseSystem, competition, resources, tasks);
+async function callCerebras(history: Message[], prompt: string, apiKey: string, competition?: Competition, resources: Resource[] = [], tasks: Task[] = [], kaggleCreds?: KaggleCredentials | null, baseSystem: string = SYSTEM_INSTRUCTION, agentConfig?: AgentConfig, mcpServers: MCPServer[] = [], memory: MemoryBlock[] = []): Promise<string> {
+    const systemInstruction = buildSystemPrompt(baseSystem, competition, resources, tasks, memory);
     const messages = [
         { role: 'system', content: systemInstruction },
         ...history.slice(-10).map(msg => ({
@@ -266,8 +383,8 @@ async function callCerebras(history: Message[], prompt: string, apiKey: string, 
     return data.choices[0].message.content;
 }
 
-async function callGroq(history: Message[], prompt: string, apiKey: string, competition?: Competition, resources: Resource[] = [], tasks: Task[] = [], kaggleCreds?: KaggleCredentials | null, baseSystem: string = SYSTEM_INSTRUCTION): Promise<string> {
-    const systemInstruction = buildSystemPrompt(baseSystem, competition, resources, tasks);
+async function callGroq(history: Message[], prompt: string, apiKey: string, competition?: Competition, resources: Resource[] = [], tasks: Task[] = [], kaggleCreds?: KaggleCredentials | null, baseSystem: string = SYSTEM_INSTRUCTION, agentConfig?: AgentConfig, mcpServers: MCPServer[] = [], memory: MemoryBlock[] = []): Promise<string> {
+    const systemInstruction = buildSystemPrompt(baseSystem, competition, resources, tasks, memory);
     const messages = [
         { role: 'system', content: systemInstruction },
         ...history.slice(-10).map(msg => ({
@@ -301,7 +418,7 @@ async function callGroq(history: Message[], prompt: string, apiKey: string, comp
 
 // --- Main Handler ---
 
-export const generateAgentResponse = async (history: Message[], userPrompt: string, keys?: LLMKeys, competition?: Competition, resources: Resource[] = [], tasks: Task[] = [], kaggleCreds?: KaggleCredentials | null): Promise<{ text: string, agentType: AgentType }> => {
+export const generateAgentResponse = async (history: Message[], userPrompt: string, keys?: LLMKeys, competition?: Competition, resources: Resource[] = [], tasks: Task[] = [], kaggleCreds?: KaggleCredentials | null, memory: MemoryBlock[] = []): Promise<{ text: string, agentType: AgentType }> => {
     
     // 1. Determine Target Agent
     let targetAgent: AgentType | null = null;
@@ -374,7 +491,7 @@ export const generateAgentResponse = async (history: Message[], userPrompt: stri
             try {
                 // We need to pass the custom baseSystem down
                 // Modifying provider functions to accept baseSystem
-                text = await provider.func(history, effectivePrompt, provider.key, competition, resources, tasks, kaggleCreds, finalBaseSystem);
+                text = await provider.func(history, effectivePrompt, provider.key, competition, resources, tasks, kaggleCreds, finalBaseSystem, agentConfig, keys?.mcpServers || [], memory);
             } catch (e: any) {
                 console.warn(`${provider.id} Failed:`, e);
                 errors.push(`${provider.id}: ${e.message}`);
@@ -550,7 +667,27 @@ async function executeStructuredQuery(
     return null;
 }
 
-export const findCompetition = async (query: string, keys?: LLMKeys): Promise<{ name: string, description: string, url: string, tags: string[] } | null> => {
+export const findCompetition = async (query: string, keys?: LLMKeys, kaggleCreds?: KaggleCredentials | null): Promise<{ name: string, description: string, url: string, tags: string[] } | null> => {
+    // We now use the main response generator turn to allow tool usage during scouting
+    try {
+        const history: Message[] = [];
+        const scoutPrompt = `Find the exact Kaggle competition details for: "${query}". 
+        Use the search_kaggle_competitions tool to get the real URL and metadata. 
+        Return ONLY a JSON object with keys: name, description, url, tags. 
+        Do not include markdown blocks, just the raw JSON string.`;
+
+        const response = await generateAgentResponse(history, scoutPrompt, keys, undefined, [], [], kaggleCreds);
+        
+        // Try to parse JSON from the agent's text response
+        const jsonMatch = response.text.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+            return JSON.parse(jsonMatch[0]);
+        }
+    } catch (e) {
+        console.warn("AI Scout failed, falling back to structured query:", e);
+    }
+
+    // Legacy fallback if the tool-enabled turn fails
     return executeStructuredQuery(
         keys,
         `Find the details for the Kaggle competition matching: "${query}". Return a JSON object with keys: name, description, url, tags. Tags should be an array of strings.`,

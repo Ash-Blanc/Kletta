@@ -1,21 +1,24 @@
 import React, { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { Message, AgentType, Competition, LLMKeys, Resource, Task, KaggleCredentials } from '../types';
-import { Send, User, Bot, Sparkles, MoreHorizontal, LayoutTemplate, ExternalLink } from 'lucide-react';
+import { Message, AgentType, Competition, LLMKeys, Resource, Task, KaggleCredentials, MemoryBlock } from '../types';
+import { Send, User, Bot, Sparkles, MoreHorizontal, LayoutTemplate, ExternalLink, FileDown } from 'lucide-react';
 import { clsx } from 'clsx';
 import { generateAgentResponse } from '../services/geminiService';
 import { NotebookCell } from './NotebookCell';
+import { exportToIPYNB } from '../services/notebookUtils';
 
 interface ChatAreaProps {
   messages: Message[];
   activeCompetition?: Competition;
   resources: Resource[];
   tasks: Task[];
+  memory: MemoryBlock[];
   onSendMessage: (msg: Message) => void;
   onRegisterResource: (res: Omit<Resource, 'id'>) => void;
   onAddTask: (title: string) => void;
   onRemoveTaskByTitle: (title: string) => void;
   onClearTasks: () => void;
+  onUpdateMemory: (label: string, value: string) => void;
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   llmKeys: LLMKeys;
   kaggleCreds: KaggleCredentials | null;
@@ -28,11 +31,13 @@ const ChatArea: React.FC<ChatAreaProps> = ({
     activeCompetition, 
     resources,
     tasks,
+    memory,
     onSendMessage, 
     onRegisterResource,
     onAddTask,
     onRemoveTaskByTitle,
     onClearTasks,
+    onUpdateMemory,
     setMessages, 
     llmKeys,
     kaggleCreds
@@ -124,7 +129,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
 
     try {
         // Pass llmKeys here to enable fallback mechanism
-        // Pass activeCompetition, resources, and tasks to inject context into system prompt
+        // Pass activeCompetition, resources, tasks, and memory to inject context into system prompt
         // Pass kaggleCreds to enable Kaggle API tool calling
         const response = await generateAgentResponse(
             messages.concat(userMsg), 
@@ -133,7 +138,8 @@ const ChatArea: React.FC<ChatAreaProps> = ({
             activeCompetition,
             resources,
             tasks,
-            kaggleCreds
+            kaggleCreds,
+            memory
         );
 
         let cleanText = response.text;
@@ -180,6 +186,19 @@ const ChatArea: React.FC<ChatAreaProps> = ({
         if (response.text.includes('[CLEAR_PLAN]')) {
             onClearTasks();
             cleanText = cleanText.replace('[CLEAR_PLAN]', '');
+        }
+
+        // 5. Check for Memory Updates [UPDATE_MEMORY: {...}]
+        const memoryRegex = /\[UPDATE_MEMORY:\s*({[\s\S]*?})\]/g;
+        let memMatch;
+        while ((memMatch = memoryRegex.exec(response.text)) !== null) {
+            try {
+                const memData = JSON.parse(memMatch[1]);
+                onUpdateMemory(memData.label, memData.value);
+                cleanText = cleanText.replace(memMatch[0], '');
+            } catch (e) {
+                console.error("Failed to parse agent memory update:", e);
+            }
         }
 
         const agentMsg: Message = {
@@ -292,9 +311,19 @@ const ChatArea: React.FC<ChatAreaProps> = ({
              </a>
            )}
         </div>
-        <button className="p-2 text-textMuted hover:text-text rounded-md hover:bg-surfaceHighlight/50">
-          <MoreHorizontal size={20} />
-        </button>
+        <div className="flex items-center gap-2">
+            <button 
+                onClick={() => exportToIPYNB(messages, activeCompetition.name)}
+                className="p-2 text-textMuted hover:text-accent rounded-md hover:bg-surfaceHighlight/50 flex items-center gap-2 text-xs font-bold uppercase transition-all"
+                title="Export implementation to Jupyter Notebook (.ipynb)"
+            >
+                <FileDown size={18} />
+                <span className="hidden sm:inline">Export .ipynb</span>
+            </button>
+            <button className="p-2 text-textMuted hover:text-text rounded-md hover:bg-surfaceHighlight/50">
+                <MoreHorizontal size={20} />
+            </button>
+        </div>
       </div>
 
       {/* Messages */}

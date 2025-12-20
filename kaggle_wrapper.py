@@ -1,11 +1,28 @@
 import sys
 import json
 import os
+import tempfile
 from kaggle.api.kaggle_api_extended import KaggleApi
 
 def setup_auth(creds):
-    os.environ['KAGGLE_USERNAME'] = creds['username']
-    os.environ['KAGGLE_KEY'] = creds['key']
+    # Create a temporary config directory to avoid conflicts with ~/.kaggle/kaggle.json
+    temp_dir = tempfile.mkdtemp()
+    
+    # Manually create the kaggle.json file in the temp directory
+    # This is the most reliable way to ensure the API uses these specific credentials
+    config_file = os.path.join(temp_dir, 'kaggle.json')
+    with open(config_file, 'w') as f:
+        json.dump({
+            "username": creds['username'].strip(),
+            "key": creds['key'].strip()
+        }, f)
+    
+    # Set permissions (required by Kaggle library on Linux/Mac)
+    os.chmod(config_file, 0o600)
+    
+    os.environ['KAGGLE_CONFIG_DIR'] = temp_dir
+    
+    # Re-initialize API to ensure it picks up the new config directory
     api = KaggleApi()
     api.authenticate()
     return api
@@ -15,11 +32,18 @@ def serialize_competition(comp):
     deadline = getattr(comp, 'deadline', '')
     enabledDate = getattr(comp, 'enabledDate', '')
     
+    # Ensure URL is absolute
+    url = getattr(comp, 'url', '')
+    if url and not url.startswith('http'):
+        url = f"https://www.kaggle.com{url}"
+    elif not url and hasattr(comp, 'ref'):
+        url = f"https://www.kaggle.com/c/{comp.ref}"
+
     return {
         'ref': getattr(comp, 'ref', ''),
         'title': getattr(comp, 'title', ''),
         'description': getattr(comp, 'description', ''),
-        'url': getattr(comp, 'url', ''),
+        'url': url,
         'deadline': deadline.isoformat() if hasattr(deadline, 'isoformat') else str(deadline),
         'category': getattr(comp, 'category', ''),
         'reward': getattr(comp, 'reward', ''),
@@ -40,6 +64,15 @@ def serialize_dataset(ds):
         'lastUpdated': lastUpdated.isoformat() if hasattr(lastUpdated, 'isoformat') else str(lastUpdated),
         'downloadCount': getattr(ds, 'downloadCount', 0),
         'voteCount': getattr(ds, 'voteCount', 0),
+    }
+
+def serialize_leaderboard_entry(entry):
+    return {
+        'teamId': getattr(entry, 'teamId', ''),
+        'teamName': getattr(entry, 'teamName', ''),
+        'submissionId': getattr(entry, 'submissionId', ''),
+        'score': getattr(entry, 'score', ''),
+        'rank': getattr(entry, 'rank', 0),
     }
 
 def main():
@@ -70,10 +103,30 @@ def main():
             datasets = api.dataset_list(search=search, page=page, sort_by=sort_by)
             print(json.dumps([serialize_dataset(d) for d in datasets]))
             
+        elif command == 'getLeaderboard':
+            id = params.get('id')
+            if not id:
+                print(json.dumps({'error': 'Competition ID required'}))
+                return
+            lb = api.competition_leaderboard_view(id)
+            print(json.dumps([serialize_leaderboard_entry(e) for e in lb]))
+
+        elif command == 'listDatasetFiles':
+            id = params.get('id')
+            if not id:
+                print(json.dumps({'error': 'Dataset ID required'}))
+                return
+            files = api.dataset_list_files(id).files
+            print(json.dumps([{'name': getattr(f, 'name', ''), 'size': getattr(f, 'size', '')} for f in files]))
+
         elif command == 'testAuth':
-            # Just try to list competitions, limit 1
-            api.competitions_list(page=1)
-            print(json.dumps({'status': 'ok'}))
+            try:
+                # Just try to list competitions, limit 1
+                api.competitions_list(page=1)
+                print(json.dumps({'status': 'ok'}))
+            except Exception as e:
+                # Re-raise to let the outer catch handle it with detailed message
+                raise Exception(f"Kaggle API verification failed: {str(e)}")
 
         else:
             print(json.dumps({'error': f'Unknown command: {command}'}))

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Competition, ViewMode, KaggleCredentials } from '../types';
-import { Trophy, Plus, MessageSquare, Database, Settings, Search, Users, PanelLeftClose, PanelLeftOpen, Trash2 } from 'lucide-react';
+import { Trophy, Plus, MessageSquare, Database, Settings, Search, Users, PanelLeftClose, PanelLeftOpen, Trash2, Users2 } from 'lucide-react';
 import { clsx } from 'clsx';
 
 interface SidebarLeftProps {
@@ -199,6 +199,7 @@ const SidebarLeft: React.FC<SidebarLeftProps> = ({
         <div className="space-y-1 w-full">
           {[
               { id: 'memory', label: 'Memory', icon: Database },
+              { id: 'team', label: 'Team', icon: Users2 },
               { id: 'agents', label: 'Agents', icon: Users },
               { id: 'settings', label: 'Settings', icon: Settings, hasStatus: true },
           ].map((item) => (

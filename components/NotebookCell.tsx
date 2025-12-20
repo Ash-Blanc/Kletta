@@ -10,6 +10,7 @@ interface NotebookCellProps {
 
 export const NotebookCell: React.FC<NotebookCellProps> = ({ code, language }) => {
   const [copied, setCopied] = useState(false);
+  // Note: react-py renders plots to a div with id="pyplotfigure" automatically if matplotlib is used
   const { runPython, stdout, stderr, isLoading, isRunning } = usePython();
 
   const handleRun = () => {
@@ -80,18 +81,25 @@ export const NotebookCell: React.FC<NotebookCellProps> = ({ code, language }) =>
               "border-t border-surfaceHighlight/50 p-3 animate-in fade-in slide-in-from-top-1",
               stderr ? "bg-red-900/10" : "bg-black/40"
           )}>
-              <div className="flex items-center gap-2 text-xs text-textMuted mb-1.5">
-                  {stderr ? <AlertCircle size={12} className="text-red-400" /> : <Terminal size={12} />}
-                  <span className={clsx(stderr && "text-red-400 font-semibold")}>
-                      {stderr ? 'Error' : 'Output'}
-                  </span>
+              {/* Stdout/Stderr */}
+              <div className="mb-3">
+                  <div className="flex items-center gap-2 text-xs text-textMuted mb-1.5">
+                      {stderr ? <AlertCircle size={12} className="text-red-400" /> : <Terminal size={12} />}
+                      <span className={clsx(stderr && "text-red-400 font-semibold")}>
+                          {stderr ? 'Error' : 'Output'}
+                      </span>
+                  </div>
+                  <pre className={clsx(
+                      "whitespace-pre-wrap text-xs",
+                      stderr ? "text-red-300/90" : "text-gray-400"
+                  )}>
+                      {stderr || stdout}
+                  </pre>
               </div>
-              <pre className={clsx(
-                  "whitespace-pre-wrap text-xs",
-                  stderr ? "text-red-300/90" : "text-gray-400"
-              )}>
-                  {stderr || stdout}
-              </pre>
+
+              {/* Graphical Figure Container */}
+              {/* react-py/pyodide will look for this ID to render matplotlib plots */}
+              <div id="pyplotfigure" className="mt-2 rounded-lg bg-white overflow-hidden empty:hidden" />
           </div>
       )}
     </div>

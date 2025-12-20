@@ -4,6 +4,7 @@ import SidebarRight from './components/SidebarRight';
 import ChatArea from './components/ChatArea';
 import MemoryViewer from './components/Dashboard';
 import AgentsTeam from './components/AgentsTeam';
+import Team from './components/Team';
 import Settings from './components/Settings';
 import LandingPage from './components/LandingPage';
 import CreateCompetitionModal from './components/CreateCompetitionModal';
@@ -11,10 +12,11 @@ import { Competition, ViewMode, Message, Resource, Task, MemoryBlock, AgentType,
 import { PanelRightClose, PanelRightOpen, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { clsx } from 'clsx';
 import { findCompetition, findResources, generateAgentResponse } from './services/geminiService';
-import { fetchUserCompetitions, searchCompetitions, searchDatasets, KaggleError } from './services/kaggleService';
+import { fetchUserCompetitions, searchCompetitions, searchDatasets, KaggleError, fetchLeaderboard } from './services/kaggleService';
 import * as storage from './services/storageService';
 import { FullScreenLoader, OverlayLoader } from './components/LoadingStates';
 import { encrypt, decrypt } from './services/cryptoUtils';
+import { SignedIn, SignedOut, UserButton, useUser } from "@clerk/clerk-react";
 
 const PROVIDER_OPTIONS: AIProvider[] = ['gemini', 'openrouter', 'openai', 'cerebras', 'groq'];
 
@@ -43,6 +45,7 @@ const App: React.FC = () => {
   const [resources, setResources] = useState<Resource[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [memory, setMemory] = useState<MemoryBlock[]>([]);
+  const [leaderboard, setLeaderboard] = useState<any[]>([]);
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(true);
   const [rightSidebarOpen, setRightSidebarOpen] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
@@ -280,6 +283,7 @@ const App: React.FC = () => {
     if (id === activeCompetitionId) return;
 
     setActiveCompetitionId(id);
+    setLeaderboard([]); // Reset leaderboard
 
     // Load persisted data for the newly selected competition
     try {
@@ -293,6 +297,11 @@ const App: React.FC = () => {
       setResources(res);
       setTasks(tsk);
       setMemory(mem);
+
+      // Attempt to fetch leaderboard
+      if (kaggleCreds) {
+          fetchLeaderboard(id, kaggleCreds).then(lb => setLeaderboard(lb)).catch(() => {});
+      }
     } catch (err) {
       console.error('Failed to load competition data:', err);
       setMessages([]);
@@ -345,12 +354,13 @@ const App: React.FC = () => {
     try {
         const response = await generateAgentResponse(
             [], 
-            `I have just joined the "${competition.name}" competition. Analyze the context and initialize our workspace by creating a high-level roadmap using [ADD_TASK] blocks. Focus on EDA, validation strategy, and baseline modeling.`, 
+            `I have just joined the "${competition.name}" competition. Analyze the context and initialize our workspace by creating a high-level roadmap using [ADD_TASK] blocks. Focus on Literature Review, SOTA Mapping, and Core Architecture Design.`, 
             llmKeys, 
             competition,
             [], // resources
             [],  // tasks
-            kaggleCreds
+            kaggleCreds,
+            [] // memory
         );
 
         let cleanText = response.text;
@@ -420,6 +430,24 @@ const App: React.FC = () => {
     setResources(prev => [newRes, ...prev]);
   };
 
+  const handleUpdateMemory = (label: string, value: string) => {
+    setMemory(prev => {
+        const existingIdx = prev.findIndex(m => m.label.toLowerCase() === label.toLowerCase());
+        const newBlock: MemoryBlock = {
+            label,
+            value,
+            lastUpdated: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+
+        if (existingIdx !== -1) {
+            const next = [...prev];
+            next[existingIdx] = newBlock;
+            return next;
+        }
+        return [newBlock, ...prev];
+    });
+  };
+
   const handleOpenCreateModal = () => {
     setIsCreateModalOpen(true);
   };
@@ -447,7 +475,7 @@ const App: React.FC = () => {
 
       // 2. Fallback to AI-based search if Kaggle didn't return results
       if (!newComp) {
-        const details = await findCompetition(query, llmKeys);
+        const details = await findCompetition(query, llmKeys, kaggleCreds);
         const newId = `comp-${Date.now()}`;
         newComp = {
           id: newId,
@@ -529,145 +557,157 @@ const App: React.FC = () => {
     return <FullScreenLoader message="Loading Kletta workspace…" subtext="Preparing agent memory, competitions, and resources." />;
   }
 
-  // Check if user is "signed in" (has at least one key configured)
-  const hasKeys = !!(llmKeys.gemini || llmKeys.openRouter || llmKeys.openAI || llmKeys.cerebras || llmKeys.groq);
-
-  if (!hasKeys) {
-      return <LandingPage onGetStarted={handleUpdateLLMKeys} />;
-  }
-
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-background text-text relative">
-      
-      {/* Mobile Sidebar Overlays (Backdrops) */}
-      {(leftSidebarOpen || rightSidebarOpen) && (
-        <div 
-          className="md:hidden fixed inset-0 z-30 bg-black/60 backdrop-blur-sm transition-opacity animate-in fade-in"
-          onClick={() => {
-            setLeftSidebarOpen(false);
-            setRightSidebarOpen(false);
-          }}
-        />
-      )}
+    <>
+      <SignedOut>
+        <LandingPage onGetStarted={handleUpdateLLMKeys} />
+      </SignedOut>
 
-      {/* Left Sidebar Toggle - Mobile Only */}
-      <button 
-        onClick={() => setLeftSidebarOpen(!leftSidebarOpen)}
-        className="md:hidden fixed top-4 left-4 z-50 p-2 text-textMuted hover:text-text bg-surface/80 backdrop-blur rounded-md border border-surfaceHighlight transition-colors shadow-sm"
-        title={leftSidebarOpen ? "Collapse Sidebar" : "Expand Sidebar"}
-      >
-        {leftSidebarOpen ? <PanelLeftClose size={20} /> : <PanelLeftOpen size={20} />}
-      </button>
-
-      {/* Global Overlay Loader for Search */}
-      {isSearching && <OverlayLoader message={loadingText} />}
-
-      {/* Create Competition Modal */}
-      <CreateCompetitionModal 
-        isOpen={isCreateModalOpen}
-        onClose={() => setIsCreateModalOpen(false)}
-        onCreate={handleProcessCompetitionCreation}
-      />
-
-      {/* Left Sidebar */}
-      <div className={clsx(
-        "fixed inset-y-0 left-0 z-40 h-full bg-surface border-r border-surfaceHighlight transition-all duration-300 ease-in-out shadow-2xl",
-        // Mobile behavior
-        leftSidebarOpen ? "translate-x-0" : "-translate-x-full",
-        // Desktop behavior: mini vs full
-        "md:static md:translate-x-0 md:shadow-none",
-        leftSidebarOpen ? "md:w-64" : "md:w-20"
-      )}>
-        <div className={clsx("h-full transition-all duration-300", leftSidebarOpen ? "w-64" : "w-full md:w-20")}>
-            <SidebarLeft 
-              competitions={competitions}
-              activeId={activeCompetitionId}
-              onSelectCompetition={handleSelectCompetition}
-              onDeleteCompetition={handleDeleteCompetition}
-              onCreateCompetition={handleOpenCreateModal}
-              activeView={activeView}
-              onViewChange={setActiveView}
-              kaggleCreds={kaggleCreds}
-              kaggleStatus={kaggleStatus}
-              isCollapsed={!leftSidebarOpen}
-              onToggle={() => setLeftSidebarOpen(!leftSidebarOpen)}
-              onBackToLanding={handleResetWorkspace}
-              className="w-full h-full"
+      <SignedIn>
+        <div className="flex h-screen w-full overflow-hidden bg-background text-text relative">
+          
+          {/* Mobile Sidebar Overlays (Backdrops) */}
+          {(leftSidebarOpen || rightSidebarOpen) && (
+            <div 
+              className="md:hidden fixed inset-0 z-30 bg-black/60 backdrop-blur-sm transition-opacity animate-in fade-in"
+              onClick={() => {
+                setLeftSidebarOpen(false);
+                setRightSidebarOpen(false);
+              }}
             />
+          )}
+
+          {/* Left Sidebar Toggle - Mobile Only */}
+          <button 
+            onClick={() => setLeftSidebarOpen(!leftSidebarOpen)}
+            className="md:hidden fixed top-4 left-4 z-50 p-2 text-textMuted hover:text-text bg-surface/80 backdrop-blur rounded-md border border-surfaceHighlight transition-colors shadow-sm"
+            title={leftSidebarOpen ? "Collapse Sidebar" : "Expand Sidebar"}
+          >
+            {leftSidebarOpen ? <PanelLeftClose size={20} /> : <PanelLeftOpen size={20} />}
+          </button>
+
+          {/* Global Overlay Loader for Search */}
+          {isSearching && <OverlayLoader message={loadingText} />}
+
+          {/* Create Competition Modal */}
+          <CreateCompetitionModal 
+            isOpen={isCreateModalOpen}
+            onClose={() => setIsCreateModalOpen(false)}
+            onCreate={handleProcessCompetitionCreation}
+          />
+
+          {/* Left Sidebar */}
+          <div className={clsx(
+            "fixed inset-y-0 left-0 z-40 h-full bg-surface border-r border-surfaceHighlight transition-all duration-300 ease-in-out shadow-2xl",
+            // Mobile behavior
+            leftSidebarOpen ? "translate-x-0" : "-translate-x-full",
+            // Desktop behavior: mini vs full
+            "md:static md:translate-x-0 md:shadow-none",
+            leftSidebarOpen ? "md:w-64" : "md:w-16"
+          )}>
+            <div className={clsx("h-full transition-all duration-300", leftSidebarOpen ? "w-64" : "w-full md:w-16")}>
+                <SidebarLeft 
+                  competitions={competitions}
+                  activeId={activeCompetitionId}
+                  onSelectCompetition={handleSelectCompetition}
+                  onDeleteCompetition={handleDeleteCompetition}
+                  onCreateCompetition={handleOpenCreateModal}
+                  activeView={activeView}
+                  onViewChange={setActiveView}
+                  kaggleCreds={kaggleCreds}
+                  kaggleStatus={kaggleStatus}
+                  isCollapsed={!leftSidebarOpen}
+                  onToggle={() => setLeftSidebarOpen(!leftSidebarOpen)}
+                  onBackToLanding={handleResetWorkspace}
+                  className="w-full h-full"
+                />
+            </div>
+          </div>
+
+          {/* Main Content Area */}
+          <main className="flex-1 flex flex-col h-full overflow-hidden relative">
+            {/* Header / Top Bar for SignedIn users */}
+            <div className="absolute top-4 right-16 z-50 flex items-center gap-4">
+                <UserButton afterSignOutUrl="/" />
+            </div>
+
+            {activeView === 'chat' && (
+              <ChatArea 
+                messages={messages} 
+                onSendMessage={handleSendMessage}
+                activeCompetition={activeCompetition}
+                resources={resources}
+                tasks={tasks}
+                memory={memory}
+                onRegisterResource={handleRegisterResource}
+                onAddTask={handleAddTask}
+                onRemoveTaskByTitle={handleRemoveTaskByTitle}
+                onClearTasks={handleClearTasks}
+                onUpdateMemory={handleUpdateMemory}
+                setMessages={setMessages}
+                llmKeys={llmKeys}
+                kaggleCreds={kaggleCreds}
+              />
+            )}
+            {activeView === 'memory' && (
+              <MemoryViewer competition={activeCompetition} memory={memory} leaderboard={leaderboard} />
+            )}
+            {activeView === 'agents' && (
+              <AgentsTeam 
+                llmKeys={llmKeys}
+                onUpdateLLMKeys={handleUpdateLLMKeys}
+              />
+            )}
+            {activeView === 'team' && (
+              <Team competition={activeCompetition} />
+            )}
+            {activeView === 'settings' && (
+              <Settings 
+                kaggleCreds={kaggleCreds}
+                onConnectKaggle={handleConnectKaggle}
+                llmKeys={llmKeys}
+                onUpdateLLMKeys={handleUpdateLLMKeys}
+                onResetWorkspace={handleResetWorkspace}
+              />
+            )}
+          </main>
+
+          {/* Right Sidebar - Context Panel */}
+          <div className={clsx(
+            "fixed inset-y-0 right-0 z-40 h-full bg-surface border-l border-surfaceHighlight transition-all duration-300 ease-in-out shadow-2xl",
+            // Mobile behavior
+            rightSidebarOpen ? "translate-x-0" : "-translate-x-full",
+            // Desktop behavior: static flow
+            "md:static md:translate-x-0 md:shadow-none overflow-hidden", 
+            rightSidebarOpen ? "md:w-72" : "md:w-0 md:border-l-0"
+          )}>
+             <div className="w-72 h-full">
+               <SidebarRight 
+                  resources={resources}
+                  tasks={tasks}
+                  onAddResource={handleAddResource}
+                  onAddTask={handleAddTask}
+                  onUpdateTask={handleUpdateTask}
+                  onDeleteTask={handleDeleteTask}
+                  onDeleteResource={handleDeleteResource}
+                  kaggleCreds={kaggleCreds}
+                  className="w-full h-full"
+               />
+             </div>
+          </div>
+          
+          {/* Right Sidebar Toggle */}
+          <button 
+            onClick={() => setRightSidebarOpen(!rightSidebarOpen)}
+            className="fixed top-4 right-4 z-50 p-2 text-textMuted hover:text-text bg-surface/80 backdrop-blur rounded-md border border-surfaceHighlight transition-colors shadow-sm"
+            title={rightSidebarOpen ? "Close Context Panel" : "Open Context Panel"}
+          >
+            {rightSidebarOpen ? <PanelRightClose size={18} /> : <PanelRightOpen size={18} />}
+          </button>
+
         </div>
-      </div>
-
-      {/* Main Content Area */}
-      <main className="flex-1 flex flex-col h-full overflow-hidden relative">
-        {activeView === 'chat' && (
-          <ChatArea 
-            messages={messages} 
-            onSendMessage={handleSendMessage}
-            activeCompetition={activeCompetition}
-            resources={resources}
-            tasks={tasks}
-            onRegisterResource={handleRegisterResource}
-            onAddTask={handleAddTask}
-            onRemoveTaskByTitle={handleRemoveTaskByTitle}
-            onClearTasks={handleClearTasks}
-            setMessages={setMessages}
-            llmKeys={llmKeys}
-            kaggleCreds={kaggleCreds}
-          />
-        )}
-        {activeView === 'memory' && (
-          <MemoryViewer competition={activeCompetition} memory={memory} />
-        )}
-        {activeView === 'agents' && (
-          <AgentsTeam 
-            llmKeys={llmKeys}
-            onUpdateLLMKeys={handleUpdateLLMKeys}
-          />
-        )}
-        {activeView === 'settings' && (
-          <Settings 
-            kaggleCreds={kaggleCreds}
-            onConnectKaggle={handleConnectKaggle}
-            llmKeys={llmKeys}
-            onUpdateLLMKeys={handleUpdateLLMKeys}
-            onResetWorkspace={handleResetWorkspace}
-          />
-        )}
-      </main>
-
-      {/* Right Sidebar - Context Panel */}
-      <div className={clsx(
-        "fixed inset-y-0 right-0 z-40 h-full bg-surface border-l border-surfaceHighlight transition-all duration-300 ease-in-out shadow-2xl",
-        // Mobile behavior
-        rightSidebarOpen ? "translate-x-0" : "translate-x-full",
-        // Desktop behavior: static flow
-        "md:static md:translate-x-0 md:shadow-none overflow-hidden", 
-        rightSidebarOpen ? "md:w-72" : "md:w-0 md:border-l-0"
-      )}>
-         <div className="w-72 h-full">
-           <SidebarRight 
-              resources={resources}
-              tasks={tasks}
-              onAddResource={handleAddResource}
-              onAddTask={handleAddTask}
-              onUpdateTask={handleUpdateTask}
-              onDeleteTask={handleDeleteTask}
-              onDeleteResource={handleDeleteResource}
-              className="w-full h-full"
-           />
-         </div>
-      </div>
-      
-      {/* Right Sidebar Toggle */}
-      <button 
-        onClick={() => setRightSidebarOpen(!rightSidebarOpen)}
-        className="fixed top-4 right-4 z-50 p-2 text-textMuted hover:text-text bg-surface/80 backdrop-blur rounded-md border border-surfaceHighlight transition-colors shadow-sm"
-        title={rightSidebarOpen ? "Close Context Panel" : "Open Context Panel"}
-      >
-        {rightSidebarOpen ? <PanelRightClose size={18} /> : <PanelRightOpen size={18} />}
-      </button>
-
-    </div>
+      </SignedIn>
+    </>
   );
 };
 

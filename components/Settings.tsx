@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { KaggleCredentials, LLMKeys, AIProvider } from '../types';
-import { Settings as SettingsIcon, Key, ExternalLink, Check, LogOut, Shield, Zap, Cpu, Loader2, Download, Upload, Database } from 'lucide-react';
+import { Settings as SettingsIcon, Key, ExternalLink, Check, LogOut, Shield, Zap, Cpu, Loader2, Download, Upload, Database, Globe, Plus, Trash2, X } from 'lucide-react';
 import { clsx } from 'clsx';
 import { providerLabels, runProviderDiagnostic } from '../services/providerDiagnostics';
 import { testKaggleCredentials, KaggleError } from '../services/kaggleService';
@@ -42,6 +42,12 @@ const Settings: React.FC<SettingsProps> = ({ kaggleCreds, onConnectKaggle, llmKe
   const [importStatus, setImportStatus] = useState<'idle' | 'importing' | 'done' | 'error'>('idle');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // MCP State
+  const [showAddMCP, setShowAddMCP] = useState(false);
+  const [newMCPName, setNewMCPName] = useState('');
+  const [newMCPUrl, setNewMCPUrl] = useState('');
+  const [newMCPKey, setNewMCPKey] = useState('');
+
   useEffect(() => {
     if (kaggleCreds) {
         setUsernameInput(kaggleCreds.username);
@@ -68,9 +74,22 @@ const Settings: React.FC<SettingsProps> = ({ kaggleCreds, onConnectKaggle, llmKe
       else if (/\s/.test(usernameInput)) { setUsernameError('No spaces allowed'); isValid = false; }
       else setUsernameError('');
 
-      if (!keyInput.trim()) { setKeyError('Key required'); isValid = false; }
-      else if (keyInput.length !== 32 || !/^[a-f0-9]+$/.test(keyInput)) { setKeyError('Invalid format (32 hex chars)'); isValid = false; }
-      else setKeyError('');
+      const key = keyInput.trim();
+      if (!key) { 
+          setKeyError('Key required'); 
+          isValid = false; 
+      } else {
+          // Supports legacy (32 hex) and new format (KGAT_ + 32 hex)
+          const isLegacy = key.length === 32 && /^[a-f0-9]+$/.test(key);
+          const isNew = key.startsWith('KGAT_') && key.length === 37 && /^[a-f0-9]+$/.test(key.slice(5));
+          
+          if (!isLegacy && !isNew) {
+              setKeyError('Invalid format. Use 32-char hex or KGAT_ prefix.');
+              isValid = false;
+          } else {
+              setKeyError('');
+          }
+      }
       
       return isValid;
   };
@@ -167,6 +186,7 @@ const Settings: React.FC<SettingsProps> = ({ kaggleCreds, onConnectKaggle, llmKe
   // --- LLM Handlers ---
   const handleSaveLLM = () => {
     onUpdateLLMKeys({
+        ...llmKeys,
         provider: provider,
         gemini: geminiKey,
         openRouter: openRouterKey,
@@ -176,6 +196,34 @@ const Settings: React.FC<SettingsProps> = ({ kaggleCreds, onConnectKaggle, llmKe
     });
     setIsLLMSaved(true);
     setTimeout(() => setIsLLMSaved(false), 3000);
+  };
+
+  const handleAddMCP = () => {
+    if (!newMCPName || !newMCPUrl) return;
+    
+    const newServer: any = {
+        id: `mcp-${Date.now()}`,
+        name: newMCPName,
+        url: newMCPUrl,
+        apiKey: newMCPKey || undefined
+    };
+
+    onUpdateLLMKeys({
+        ...llmKeys,
+        mcpServers: [...(llmKeys.mcpServers || []), newServer]
+    });
+
+    setNewMCPName('');
+    setNewMCPUrl('');
+    setNewMCPKey('');
+    setShowAddMCP(false);
+  };
+
+  const handleDeleteMCP = (id: string) => {
+    onUpdateLLMKeys({
+        ...llmKeys,
+        mcpServers: (llmKeys.mcpServers || []).filter((s: any) => s.id !== id)
+    });
   };
 
   const handleRunDiagnostic = async (p: AIProvider) => {
@@ -649,6 +697,104 @@ const Settings: React.FC<SettingsProps> = ({ kaggleCreds, onConnectKaggle, llmKe
                         Export
                     </button>
                 </div>
+            </div>
+        </div>
+
+        {/* --- MCP Management Section --- */}
+        <div className="space-y-4">
+            <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-text flex items-center gap-2">
+                    <Globe size={20} className="text-accent" />
+                    MCP Servers
+                </h2>
+                <button 
+                    onClick={() => setShowAddMCP(!showAddMCP)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent/10 text-accent text-xs font-bold uppercase hover:bg-accent/20 transition-all"
+                >
+                    {showAddMCP ? <X size={14} /> : <Plus size={14} />}
+                    {showAddMCP ? 'Cancel' : 'Add Server'}
+                </button>
+            </div>
+
+            <p className="text-sm text-textMuted leading-relaxed">
+                Connect to remote Model Context Protocol (MCP) servers to give your agents extra tools (search, code analysis, etc).
+            </p>
+
+            {showAddMCP && (
+                <div className="bg-surfaceHighlight/10 border border-accent/20 rounded-2xl p-6 space-y-4 animate-in zoom-in-95 duration-200">
+                    <div className="grid md:grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                            <label className="text-[10px] uppercase font-black text-textMuted ml-1">Server Name</label>
+                            <input 
+                                type="text" 
+                                placeholder="e.g. Package Search"
+                                value={newMCPName}
+                                onChange={(e) => setNewMCPName(e.target.value)}
+                                className="w-full bg-black/40 border border-surfaceHighlight rounded-xl px-4 py-2.5 text-sm text-text focus:outline-none focus:border-accent transition-all"
+                            />
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="text-[10px] uppercase font-black text-textMuted ml-1">Endpoint URL</label>
+                            <input 
+                                type="text" 
+                                placeholder="https://..."
+                                value={newMCPUrl}
+                                onChange={(e) => setNewMCPUrl(e.target.value)}
+                                className="w-full bg-black/40 border border-surfaceHighlight rounded-xl px-4 py-2.5 text-sm text-text focus:outline-none focus:border-accent transition-all"
+                            />
+                        </div>
+                    </div>
+                    <div className="space-y-1.5">
+                        <label className="text-[10px] uppercase font-black text-textMuted ml-1">API Key (Optional)</label>
+                        <input 
+                            type="password" 
+                            placeholder="X-API-Key or Bearer Token"
+                            value={newMCPKey}
+                            onChange={(e) => setNewMCPKey(e.target.value)}
+                            className="w-full bg-black/40 border border-surfaceHighlight rounded-xl px-4 py-2.5 text-sm text-text focus:outline-none focus:border-accent transition-all"
+                        />
+                    </div>
+                    <button 
+                        onClick={handleAddMCP}
+                        disabled={!newMCPName || !newMCPUrl}
+                        className="w-full py-3 bg-accent hover:bg-accentHover text-white text-xs font-black uppercase rounded-xl transition-all shadow-lg shadow-accent/20 disabled:opacity-50"
+                    >
+                        Register MCP Node
+                    </button>
+                </div>
+            )}
+
+            <div className="grid gap-3">
+                {(!llmKeys.mcpServers || llmKeys.mcpServers.length === 0) ? (
+                    <div className="p-8 border border-dashed border-surfaceHighlight rounded-2xl text-center">
+                        <p className="text-xs text-textMuted italic">No remote MCP servers configured.</p>
+                    </div>
+                ) : (
+                    llmKeys.mcpServers.map((server: any) => (
+                        <div key={server.id} className="flex items-center justify-between p-4 bg-surface rounded-xl border border-surfaceHighlight group">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2 rounded-lg bg-accent/10 text-accent">
+                                    <Globe size={18} />
+                                </div>
+                                <div className="min-w-0">
+                                    <h4 className="text-sm font-bold text-text truncate">{server.name}</h4>
+                                    <p className="text-[10px] text-textMuted truncate max-w-[200px]">{server.url}</p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                {server.apiKey && (
+                                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-green-500/10 text-green-400 border border-green-500/20 font-bold uppercase">Authorized</span>
+                                )}
+                                <button 
+                                    onClick={() => handleDeleteMCP(server.id)}
+                                    className="p-2 text-textMuted hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
+                                >
+                                    <Trash2 size={16} />
+                                </button>
+                            </div>
+                        </div>
+                    ))
+                )}
             </div>
         </div>
 

@@ -49,7 +49,13 @@ const kaggleFetch = async <T>(
     }
 
     if (!response.ok) {
-      throw new KaggleError('UNKNOWN', `Kaggle API error: ${response.status} ${response.statusText}`);
+      let errorMsg = `Kaggle API error: ${response.status} ${response.statusText}`;
+      try {
+          const errorData = await response.json();
+          if (errorData.error) errorMsg = errorData.error;
+      } catch (e) { /* ignore parse error */ }
+      
+      throw new KaggleError('UNKNOWN', errorMsg);
     }
 
     return response.json();
@@ -221,11 +227,29 @@ export const searchDatasets = async (
 };
 
 /**
+ * Fetch leaderboard for a competition
+ */
+export const fetchLeaderboard = async (
+  competitionId: string,
+  creds: KaggleCredentials | null
+): Promise<any[]> => {
+  return kaggleFetch<any[]>('/competitions/leaderboard', creds, { id: competitionId });
+};
+
+/**
+ * List files in a dataset
+ */
+export const fetchDatasetFiles = async (
+  datasetId: string,
+  creds: KaggleCredentials | null
+): Promise<any[]> => {
+  return kaggleFetch<any[]>('/datasets/files', creds, { id: datasetId });
+};
+
+/**
  * Test Kaggle credentials by making a lightweight API call
  */
 export const testKaggleCredentials = async (creds: KaggleCredentials | null): Promise<string> => {
-  await kaggleFetch<KaggleCompetitionResponse[]>('/competitions/list', creds, {
-    page: '1',
-  });
+  await kaggleFetch<{ status: string }>('/test', creds);
   return 'Kaggle credentials verified successfully.';
 };

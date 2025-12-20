@@ -21,6 +21,15 @@ export interface AgentConfig {
   customPrompt?: string;
   preferredProvider?: AIProvider;
   fallbackProviders?: AIProvider[];
+  mcpIds?: string[];
+}
+
+export interface MCPServer {
+  id: string;
+  name: string;
+  url: string;
+  apiKey?: string;
+  // We can also store tool definitions if we want to cache them
 }
 
 export interface LLMKeys {
@@ -31,6 +40,7 @@ export interface LLMKeys {
   cerebras?: string;
   groq?: string;
   agentConfigs?: Record<string, AgentConfig>;
+  mcpServers?: MCPServer[];
 }
 
 export interface Message {
@@ -52,7 +62,7 @@ export interface Competition {
   status: 'active' | 'archived';
 }
 
-export type ViewMode = 'chat' | 'memory' | 'agents' | 'settings';
+export type ViewMode = 'chat' | 'memory' | 'agents' | 'settings' | 'team';
 
 export interface Resource {
   id: string;

@@ -3,6 +3,13 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import ErrorBoundary from './components/ErrorBoundary';
 import { PythonProvider } from 'react-py';
+import { ClerkProvider } from '@clerk/clerk-react';
+
+const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+
+if (!PUBLISHABLE_KEY) {
+  throw new Error("Missing Clerk Publishable Key. Please set VITE_CLERK_PUBLISHABLE_KEY in .env.local");
+}
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -11,9 +18,11 @@ if (!rootElement) {
 
 const root = ReactDOM.createRoot(rootElement);
 root.render(
-  <PythonProvider packages={{ official: ['numpy', 'pandas', 'matplotlib'] }}>
-    <ErrorBoundary>
-      <App />
-    </ErrorBoundary>
-  </PythonProvider>
+  <ClerkProvider publishableKey={PUBLISHABLE_KEY} afterSignOutUrl="/">
+    <PythonProvider packages={{ official: ['numpy', 'pandas', 'matplotlib'] }}>
+      <ErrorBoundary>
+        <App />
+      </ErrorBoundary>
+    </PythonProvider>
+  </ClerkProvider>
 );

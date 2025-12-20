@@ -22,10 +22,15 @@ async function runKaggleScript(command: string, creds: any, params: any) {
   
   if (error && !output) {
       console.error("Python Error:", error);
+      // Check if it's a known Kaggle 401/403
+      if (error.includes("401") || error.includes("Unauthorized")) {
+          throw new Error("Kaggle Authentication Failed (401). Please check your Username and API Token.");
+      }
       throw new Error(error);
   }
 
   try {
+      if (!output) throw new Error("No output from Kaggle script");
       return JSON.parse(output);
   } catch (e) {
       console.error("JSON Parse Error:", output);
@@ -61,6 +66,12 @@ const server = serve({
               result = await runKaggleScript("listCompetitions", creds, searchParams);
           } else if (kagglePath === "datasets/list") {
               result = await runKaggleScript("listDatasets", creds, searchParams);
+          } else if (kagglePath === "competitions/leaderboard") {
+              result = await runKaggleScript("getLeaderboard", creds, searchParams);
+          } else if (kagglePath === "datasets/files") {
+              result = await runKaggleScript("listDatasetFiles", creds, searchParams);
+          } else if (kagglePath === "test") {
+              result = await runKaggleScript("testAuth", creds, {});
           } else {
               return new Response(JSON.stringify({ error: "Endpoint not supported via Python wrapper yet" }), { status: 404 });
           }

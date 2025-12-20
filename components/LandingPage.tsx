@@ -6,340 +6,165 @@ import {
     Database, Terminal, Layout, Search, Layers 
 } from 'lucide-react';
 import { clsx } from 'clsx';
+import { SignInButton, SignUpButton } from "@clerk/clerk-react";
 
 interface LandingPageProps {
   onGetStarted: (keys: LLMKeys) => void;
 }
 
 const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
-  const [provider, setProvider] = useState<AIProvider>('gemini');
-  const [apiKey, setApiKey] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showAuth, setShowAuth] = useState(false);
-  const [activeFeature, setActiveFeature] = useState(0);
-
   const features = [
     {
-        title: "Multi-Agent Swarm",
-        description: "Scouts, Researchers, and Coders working in parallel to solve your competition.",
-        icon: <Layers className="text-emerald-400" size={20} />
+        title: "Autonomous Swarm",
+        description: "Specialized agents that collaborate, research, and code in real-time.",
+        icon: <Sparkles className="text-emerald-400" size={20} />
     },
     {
-        title: "Official Kaggle API",
-        description: "Direct integration for dataset discovery and competition tracking.",
-        icon: <Database className="text-blue-400" size={20} />
-    },
-    {
-        title: "Runnable Notebooks",
-        description: "Execute Python code blocks directly in your chat using Pyodide WASM.",
-        icon: <Terminal className="text-purple-400" size={20} />
-    },
-    {
-        title: "Persistent Memory",
-        description: "Powered by Letta infrastructure to remember every experiment and insight.",
-        icon: <Hexagon className="text-amber-400" size={20} />
+        title: "Native Execution",
+        description: "Run Python cells directly in your browser with full library support.",
+        icon: <Terminal className="text-blue-400" size={20} />
     }
   ];
 
-  const handleStart = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!apiKey.trim()) return;
-    
-    setIsSubmitting(true);
-    
-    setTimeout(() => {
-        const keys: LLMKeys = {
-            provider: provider,
-            gemini: provider === 'gemini' ? apiKey : '',
-            openRouter: provider === 'openrouter' ? apiKey : '',
-            openAI: provider === 'openai' ? apiKey : '',
-            cerebras: provider === 'cerebras' ? apiKey : '',
-            groq: provider === 'groq' ? apiKey : ''
-        };
-        onGetStarted(keys);
-    }, 800);
-  };
-
-  const getProviderLink = (p: AIProvider) => {
-    switch(p) {
-      case 'gemini': return 'https://aistudio.google.com/app/apikey';
-      case 'openai': return 'https://platform.openai.com/api-keys';
-      case 'openrouter': return 'https://openrouter.ai/keys';
-      case 'cerebras': return 'https://inference.cerebras.ai/';
-      case 'groq': return 'https://console.groq.com/keys';
-      default: return '#';
-    }
-  };
-
   return (
-    <div className="min-h-screen bg-[#050505] text-white font-sans selection:bg-emerald-500/30 selection:text-white overflow-hidden relative flex flex-col">
+    <div className="min-h-screen bg-[#020202] text-white font-sans selection:bg-emerald-500/30 selection:text-white overflow-hidden relative flex flex-col">
       
-      {/* Background Ambience */}
+      {/* Dynamic Background */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
-         {/* Top Left Green Glow */}
-         <div className="absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] bg-emerald-500/10 rounded-full blur-[120px] opacity-40 mix-blend-screen animate-pulse-slow" />
-         {/* Bottom Right Blue Glow */}
-         <div className="absolute bottom-[-10%] right-[-10%] w-[40vw] h-[40vw] bg-blue-600/10 rounded-full blur-[120px] opacity-30 mix-blend-screen" />
-         {/* Grid Pattern Overlay */}
-         <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:60px_60px] opacity-20" />
+         <div className="absolute top-[-20%] left-[-10%] w-[70vw] h-[70vw] bg-emerald-600/10 rounded-full blur-[140px] opacity-50 mix-blend-screen animate-pulse-slow" />
+         <div className="absolute bottom-[-20%] right-[-10%] w-[60vw] h-[60vw] bg-blue-600/10 rounded-full blur-[140px] opacity-40 mix-blend-screen" />
+         <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:40px_40px] opacity-30" />
       </div>
 
       {/* Navbar */}
-      <nav className="relative z-50 w-full max-w-[1400px] mx-auto px-6 py-8 flex items-center justify-between animate-in fade-in slide-in-from-top-4 duration-700">
-        <div className="flex items-center gap-3 cursor-pointer" onClick={() => setShowAuth(false)}>
-            <div className="w-8 h-8 bg-white text-black rounded-lg flex items-center justify-center font-bold font-serif text-lg tracking-tighter">K</div>
-            <div className="font-sans font-semibold text-lg tracking-tight text-white/90">Kletta</div>
+      <nav className="relative z-50 w-full max-w-[1400px] mx-auto px-8 py-10 flex items-center justify-between animate-in fade-in slide-in-from-top-4 duration-1000">
+        <div className="flex items-center gap-4 cursor-pointer group">
+            <div className="w-10 h-10 bg-white text-black rounded-2xl flex items-center justify-center font-black font-serif text-xl tracking-tighter group-hover:rotate-12 transition-transform duration-500 shadow-[0_0_20px_rgba(255,255,255,0.2)]">K</div>
+            <div className="font-sans font-bold text-xl tracking-tight text-white/90">Kletta</div>
         </div>
 
-        {/* Minimal Desktop Nav */}
-        <div className="hidden md:flex items-center gap-10 text-sm font-medium text-white/60">
-            <span className="hover:text-white transition-colors cursor-pointer">Agents</span>
-            <span className="hover:text-white transition-colors cursor-pointer">Memory</span>
-            <span className="hover:text-white transition-colors cursor-pointer">Network</span>
+        <div className="hidden md:flex items-center gap-12 text-[13px] uppercase font-bold tracking-widest text-white/40">
+            <span className="hover:text-emerald-400 transition-colors cursor-pointer">Protocol</span>
+            <span className="hover:text-emerald-400 transition-colors cursor-pointer">Intelligence</span>
+            <span className="hover:text-emerald-400 transition-colors cursor-pointer">Archive</span>
         </div>
 
-        {/* Right Action */}
-        <div>
-            <button 
-                onClick={() => setShowAuth(true)}
-                className="group relative bg-[#1A1A1A] hover:bg-[#252525] border border-white/10 text-white text-sm font-medium px-6 py-2.5 rounded-full transition-all flex items-center gap-2 overflow-hidden"
-            >
-                <span className="relative z-10">Join AI</span>
+        <SignInButton mode="modal">
+            <button className="group relative px-8 py-3 rounded-full text-xs font-black uppercase tracking-widest transition-all overflow-hidden border border-white/10 bg-white/5 hover:border-emerald-500/50">
+                <span className="relative z-10">Access Node</span>
                 <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
             </button>
-        </div>
+        </SignInButton>
       </nav>
 
       {/* Main Content */}
-      <div className="relative z-10 w-full max-w-[1400px] mx-auto px-6 flex-1 flex flex-col md:flex-row items-center justify-center gap-16 lg:gap-32 py-12 lg:py-0">
+      <div className="relative z-10 w-full max-w-[1400px] mx-auto px-8 flex-1 flex flex-col lg:flex-row items-center justify-center gap-20 py-12">
         
-        {/* Left Column: Text & Auth */}
-        <div className="flex-1 max-w-xl w-full relative min-h-[450px] flex flex-col justify-center">
+        <div className="flex-1 max-w-2xl w-full relative min-h-[500px] flex flex-col justify-center text-center lg:text-left items-center lg:items-start">
             
-            {/* Hero Content (Slide Out) */}
-            <div className={clsx(
-                "transition-all duration-700 ease-[cubic-bezier(0.25,1,0.5,1)] absolute w-full",
-                showAuth ? "opacity-0 -translate-x-8 pointer-events-none scale-95" : "opacity-100 translate-x-0 scale-100"
-            )}>
-                <div className="inline-flex items-center gap-2 mb-8 animate-in fade-in slide-in-from-bottom-4 duration-700 delay-100">
-                    <span className="px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold tracking-wide uppercase">
-                        Letta Powered
+            {/* Hero Content */}
+            <div className="transition-all duration-1000 ease-[cubic-bezier(0.23,1,0.32,1)] w-full">
+                <div className="inline-flex items-center gap-3 mb-10 animate-in fade-in slide-in-from-bottom-4 duration-1000 delay-200">
+                    <div className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                    <span className="text-[11px] font-black tracking-[0.2em] uppercase text-emerald-400">
+                        System Online // v2.5
                     </span>
-                    <span className="text-white/40 text-xs">v2.0 Live</span>
                 </div>
 
-                <h1 className="text-5xl lg:text-7xl font-sans font-medium tracking-tight text-white mb-8 leading-[1.05] animate-in fade-in slide-in-from-bottom-4 duration-700 delay-200">
-                    AI Agent Network <br />
-                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-200 to-white">
-                        Built With You
+                <h1 className="text-6xl lg:text-8xl font-sans font-bold tracking-tighter text-white mb-10 leading-[0.9] animate-in fade-in slide-in-from-bottom-4 duration-1000 delay-300">
+                    Kaggle <br />
+                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-300 to-emerald-600 animate-gradient-x">
+                        Redefined.
                     </span>
                 </h1>
                 
-                <p className="text-lg text-white/50 max-w-md leading-relaxed mb-10 animate-in fade-in slide-in-from-bottom-4 duration-700 delay-300 font-light">
-                    Deploy autonomous Scouts, Researchers, and Coders. 
-                    Powered by full-stack AI infrastructure and persistent memory.
+                <p className="text-xl text-white/40 max-w-lg leading-relaxed mb-12 animate-in fade-in slide-in-from-bottom-4 duration-1000 delay-400 font-medium">
+                    The autonomous workspace for data scientists. 
+                    Deploy specialized agent swarms to analyze, research, and dominate competitions.
                 </p>
 
-                <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 delay-400 flex items-center gap-6">
-                    <button 
-                        onClick={() => setShowAuth(true)}
-                        className="group bg-white hover:bg-emerald-50 text-black text-base font-semibold px-8 py-4 rounded-xl transition-all flex items-center gap-2 shadow-[0_0_20px_rgba(255,255,255,0.1)] hover:shadow-[0_0_40px_rgba(16,185,129,0.3)] hover:-translate-y-0.5"
-                    >
-                        Activate AI
-                        <ArrowRight className="w-5 h-5 transition-transform group-hover:translate-x-1" />
-                    </button>
-                    <div className="text-sm text-white/40 font-medium cursor-default">
-                        v2.5.0-stable
-                    </div>
+                <div className="animate-in fade-in slide-in-from-bottom-4 duration-1000 delay-500 flex flex-col sm:flex-row items-center gap-6">
+                    <SignUpButton mode="modal">
+                        <button className="group bg-emerald-500 hover:bg-emerald-400 text-black text-sm font-black uppercase tracking-widest px-10 py-5 rounded-2xl transition-all flex items-center gap-3 shadow-[0_20px_40px_-10px_rgba(16,185,129,0.4)] hover:shadow-[0_25px_50px_-12px_rgba(16,185,129,0.6)] hover:-translate-y-1 active:translate-y-0">
+                            Activate Intelligence
+                            <ArrowRight size={18} strokeWidth={3} className="transition-transform group-hover:translate-x-1" />
+                        </button>
+                    </SignUpButton>
+                    <SignInButton mode="modal">
+                        <button className="text-white/40 hover:text-white text-xs font-black uppercase tracking-widest transition-colors">
+                            Existing Protocol Login
+                        </button>
+                    </SignInButton>
                 </div>
 
-                {/* Feature Mini-Grid */}
-                <div className="mt-16 grid grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-500">
-                    {features.slice(0, 2).map((f, i) => (
-                        <div key={i} className="group/feat flex flex-col gap-3 p-4 rounded-2xl border border-white/5 bg-white/[0.02] hover:bg-white/[0.05] transition-all">
-                            <div className="w-10 h-10 rounded-lg bg-white/5 flex items-center justify-center group-hover/feat:scale-110 transition-transform">
+                <div className="mt-20 grid grid-cols-2 gap-10 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-700">
+                    {features.map((f, i) => (
+                        <div key={i} className="flex flex-col gap-4 items-center lg:items-start text-center lg:text-left">
+                            <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center shadow-inner">
                                 {f.icon}
                             </div>
-                            <div>
-                                <h4 className="text-sm font-semibold text-white/90">{f.title}</h4>
-                                <p className="text-xs text-white/40 leading-relaxed mt-1">{f.description}</p>
+                            <div className="space-y-1">
+                                <h4 className="text-sm font-bold text-white/90 uppercase tracking-wider">{f.title}</h4>
+                                <p className="text-xs text-white/30 leading-relaxed font-medium">{f.description}</p>
                             </div>
                         </div>
                     ))}
-                </div>
-            </div>
-
-            {/* Auth Form (Slide In) */}
-            <div className={clsx(
-                "transition-all duration-700 ease-[cubic-bezier(0.25,1,0.5,1)] w-full",
-                showAuth ? "opacity-100 translate-x-0 relative blur-none" : "opacity-0 translate-x-12 absolute pointer-events-none blur-sm"
-            )}>
-                <div className="bg-[#111] border border-white/10 p-8 rounded-3xl shadow-2xl relative overflow-hidden group">
-                     {/* Card Glow */}
-                     <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 rounded-full blur-[80px] group-hover:bg-emerald-500/10 transition-colors" />
-
-                     <div className="relative z-10">
-                        <div className="flex items-center justify-between mb-8">
-                            <button 
-                                type="button" 
-                                onClick={() => setShowAuth(false)}
-                                className="text-xs font-bold uppercase tracking-wider text-white/40 hover:text-white flex items-center gap-2 transition-colors"
-                            >
-                                <ChevronLeft size={14} /> Return
-                            </button>
-                            <div className="flex bg-black/50 rounded-lg p-1 gap-1 border border-white/5 overflow-x-auto no-scrollbar max-w-[240px]">
-                                <button type="button" onClick={() => setProvider('gemini')} className={clsx("px-3 py-1.5 rounded-md text-[10px] uppercase font-bold tracking-wide transition-all whitespace-nowrap", provider === 'gemini' ? "bg-emerald-600 text-white shadow-sm" : "text-white/40 hover:text-white")} title="Google Gemini">Gemini</button>
-                                <button type="button" onClick={() => setProvider('openrouter')} className={clsx("px-3 py-1.5 rounded-md text-[10px] uppercase font-bold tracking-wide transition-all whitespace-nowrap", provider === 'openrouter' ? "bg-purple-600 text-white shadow-sm" : "text-white/40 hover:text-white")} title="OpenRouter">Router</button>
-                                <button type="button" onClick={() => setProvider('openai')} className={clsx("px-3 py-1.5 rounded-md text-[10px] uppercase font-bold tracking-wide transition-all whitespace-nowrap", provider === 'openai' ? "bg-blue-600 text-white shadow-sm" : "text-white/40 hover:text-white")} title="OpenAI">OpenAI</button>
-                                <button type="button" onClick={() => setProvider('cerebras')} className={clsx("px-3 py-1.5 rounded-md text-[10px] uppercase font-bold tracking-wide transition-all whitespace-nowrap", provider === 'cerebras' ? "bg-blue-500 text-white shadow-sm" : "text-white/40 hover:text-white")} title="Cerebras">Cerebras</button>
-                                <button type="button" onClick={() => setProvider('groq')} className={clsx("px-3 py-1.5 rounded-md text-[10px] uppercase font-bold tracking-wide transition-all whitespace-nowrap", provider === 'groq' ? "bg-orange-600 text-white shadow-sm" : "text-white/40 hover:text-white")} title="Groq">Groq</button>
-                            </div>
-                        </div>
-
-                        <form onSubmit={handleStart} className="flex flex-col gap-6">
-                            <div className="space-y-2">
-                                <h3 className="text-2xl font-medium text-white tracking-tight">Access Node</h3>
-                                <p className="text-sm text-white/50">
-                                    Secure connection required. API keys are stored locally.
-                                </p>
-                            </div>
-                            
-                            <div className="space-y-3">
-                                <div className="relative group/input">
-                                    <input 
-                                        type="password" 
-                                        placeholder={
-                                            provider === 'gemini' ? "Gemini API Key (AIza...)" : 
-                                            provider === 'openrouter' ? "OpenRouter Key (sk-or...)" : 
-                                            provider === 'openai' ? "OpenAI Key (sk-...)" :
-                                            provider === 'cerebras' ? "Cerebras API Key (sk-...)" :
-                                            "Groq API Key (gsk_...)"
-                                        }
-                                        value={apiKey}
-                                        onChange={(e) => setApiKey(e.target.value)}
-                                        className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl px-5 py-4 text-sm text-white focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 transition-all placeholder:text-white/20"
-                                        autoFocus={showAuth}
-                                    />
-                                    <div className="absolute right-4 top-4 text-white/20 group-focus-within/input:text-emerald-400 transition-colors">
-                                        {provider === 'gemini' ? <Zap size={18} /> : provider === 'openrouter' ? <Cpu size={18} /> : <Shield size={18} />}
-                                    </div>
-                                </div>
-                                <div className="flex justify-between items-center px-1">
-                                    <span className="text-[10px] text-white/30 uppercase tracking-wider font-bold">Encrypted Local Storage</span>
-                                    <a 
-                                        href={getProviderLink(provider)} 
-                                        target="_blank" 
-                                        rel="noopener noreferrer" 
-                                        className="text-[10px] text-emerald-400 hover:text-emerald-300 transition-colors flex items-center gap-1 font-medium"
-                                    >
-                                        Generate Key <ExternalLink size={10} />
-                                    </a>
-                                </div>
-                            </div>
-
-                            <button 
-                                type="submit" 
-                                disabled={!apiKey || isSubmitting}
-                                className="w-full bg-emerald-500 hover:bg-emerald-400 text-black font-bold py-4 rounded-xl shadow-[0_0_25px_rgba(16,185,129,0.2)] hover:shadow-[0_0_35px_rgba(16,185,129,0.4)] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
-                            >
-                                {isSubmitting ? (
-                                    <span className="flex items-center gap-2">
-                                        <Sparkles size={16} className="animate-spin" /> Initializing...
-                                    </span>
-                                ) : (
-                                    <>
-                                        Initialize Workspace
-                                        <ArrowRight size={18} />
-                                    </>
-                                )}
-                            </button>
-                        </form>
-                     </div>
                 </div>
             </div>
         </div>
 
-        {/* Right Column: 3D Visual */}
-        <div className="flex-1 hidden lg:flex items-center justify-center relative min-h-[600px] w-full animate-in fade-in slide-in-from-right-8 duration-1000 delay-200">
+        {/* Right Column: Dynamic Core */}
+        <div className="flex-1 hidden lg:flex items-center justify-center relative min-h-[600px] w-full">
              
-             {/* Collaborative Agents Ticker */}
-             <div className="absolute top-0 right-0 left-0 flex justify-center gap-4 pointer-events-none overflow-hidden py-10 opacity-40">
-                <div className="flex gap-8 animate-marquee whitespace-nowrap">
-                    {['@scout', '@researcher', '@coder', '@strategist', '@analyst', '@ensemble'].map((tag) => (
-                        <span key={tag} className="text-xs font-mono font-bold tracking-widest text-emerald-400 uppercase">
-                            {tag}
-                        </span>
+             {/* Agents Ticker */}
+             <div className="absolute top-0 right-0 left-0 flex justify-center gap-10 pointer-events-none overflow-hidden py-12 opacity-20">
+                <div className="flex gap-12 animate-marquee whitespace-nowrap">
+                    {['SCOUT', 'RESEARCHER', 'CODER', 'STRATEGIST', 'ANALYST', 'ENSEMBLE'].map((tag) => (
+                        <span key={tag} className="text-[10px] font-black tracking-[0.4em] text-white uppercase">{tag}</span>
                     ))}
                 </div>
-                <div className="flex gap-8 animate-marquee whitespace-nowrap" aria-hidden="true">
-                    {['@scout', '@researcher', '@coder', '@strategist', '@analyst', '@ensemble'].map((tag) => (
-                        <span key={tag} className="text-xs font-mono font-bold tracking-widest text-emerald-400 uppercase">
-                            {tag}
-                        </span>
+                <div className="flex gap-12 animate-marquee whitespace-nowrap" aria-hidden="true">
+                    {['SCOUT', 'RESEARCHER', 'CODER', 'STRATEGIST', 'ANALYST', 'ENSEMBLE'].map((tag) => (
+                        <span key={tag} className="text-[10px] font-black tracking-[0.4em] text-white uppercase">{tag}</span>
                     ))}
                 </div>
              </div>
 
-             {/* 3D Structure - Emerald Crystal */}
-             <div className="relative w-[500px] h-[500px] perspective-[1000px] flex items-center justify-center">
-                
-                {/* Central Core */}
-                <div className="absolute w-40 h-40 bg-gradient-to-br from-emerald-500 to-teal-800 rounded-3xl opacity-90 animate-float shadow-[0_0_100px_rgba(16,185,129,0.3)] flex items-center justify-center z-20 border border-white/20 backdrop-blur-sm">
-                    <Bot size={80} className="text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.5)]" />
-                </div>
-
-                {/* Orbiting Satellites */}
-                <div className="absolute inset-0 m-auto w-full h-full animate-spin-slow">
-                    {/* Top */}
-                    <div className="absolute top-[10%] left-1/2 -translate-x-1/2 w-20 h-20 bg-[#111] border border-emerald-500/30 rounded-2xl backdrop-blur-md flex items-center justify-center shadow-2xl transform hover:scale-110 transition-transform">
-                         <Zap size={28} className="text-emerald-400" />
-                    </div>
-                    {/* Bottom Right */}
-                    <div className="absolute bottom-[20%] right-[15%] w-16 h-16 bg-[#111] border border-blue-500/30 rounded-2xl backdrop-blur-md flex items-center justify-center shadow-2xl transform hover:scale-110 transition-transform">
-                         <Cpu size={24} className="text-blue-400" />
-                    </div>
-                    {/* Bottom Left */}
-                    <div className="absolute bottom-[20%] left-[15%] w-16 h-16 bg-[#111] border border-purple-500/30 rounded-2xl backdrop-blur-md flex items-center justify-center shadow-2xl transform hover:scale-110 transition-transform">
-                         <Shield size={24} className="text-purple-400" />
-                    </div>
+             <div className="relative flex items-center justify-center scale-110">
+                <div className="absolute w-[400px] h-[400px] bg-emerald-500/10 rounded-full blur-[100px] animate-pulse-slow" />
+                <div className="relative z-20 w-64 h-64 bg-gradient-to-br from-white to-emerald-200 rounded-[60px] rotate-[15deg] animate-float shadow-[0_50px_100px_-20px_rgba(16,185,129,0.5)] flex items-center justify-center border-4 border-white/20 backdrop-blur-3xl">
+                    <Bot size={100} className="text-black -rotate-[15deg] drop-shadow-2xl" />
                 </div>
                 
-                {/* Orbital Rings */}
-                <div className="absolute inset-[10%] border border-emerald-500/20 rounded-full animate-spin-slow-reverse opacity-40 skew-x-12"></div>
-                <div className="absolute inset-[-5%] border border-white/5 rounded-full animate-spin-slow opacity-20 border-dashed"></div>
+                {/* Visual Elements */}
+                <div className="absolute -top-10 -right-10 w-32 h-32 bg-blue-500/20 rounded-full blur-3xl animate-pulse" />
+                <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-emerald-500/20 rounded-full blur-3xl animate-pulse" />
              </div>
         </div>
 
       </div>
 
       <style>{`
-        .perspective-[1000px] { perspective: 1000px; }
         @keyframes float {
-          0%, 100% { transform: translateY(0) rotateX(10deg) rotateY(10deg); }
-          50% { transform: translateY(-20px) rotateX(10deg) rotateY(15deg); }
-        }
-        @keyframes spin-slow {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-        @keyframes spin-slow-reverse {
-          from { transform: rotate(360deg); }
-          to { transform: rotate(0deg); }
+          0%, 100% { transform: translateY(0) rotate(15deg) scale(1); }
+          50% { transform: translateY(-30px) rotate(18deg) scale(1.02); }
         }
         @keyframes pulse-slow {
-          0%, 100% { opacity: 0.4; }
-          50% { opacity: 0.2; }
+          0%, 100% { opacity: 0.6; transform: scale(1); }
+          50% { opacity: 0.3; transform: scale(1.1); }
         }
         @keyframes marquee {
           0% { transform: translateX(0); }
           100% { transform: translateX(-50%); }
         }
-        .animate-float { animation: float 8s ease-in-out infinite; }
-        .animate-spin-slow { animation: spin-slow 30s linear infinite; }
-        .animate-spin-slow-reverse { animation: spin-slow-reverse 40s linear infinite; }
-        .animate-pulse-slow { animation: pulse-slow 5s ease-in-out infinite; }
-        .animate-marquee { animation: marquee 20s linear infinite; }
-        
+        @keyframes gradient-x {
+          0%, 100% { background-position: 0% 50%; }
+          50% { background-position: 100% 50%; }
+        }
+        .animate-float { animation: float 10s ease-in-out infinite; }
+        .animate-pulse-slow { animation: pulse-slow 8s ease-in-out infinite; }
+        .animate-marquee { animation: marquee 30s linear infinite; }
+        .animate-gradient-x { background-size: 200% 200%; animation: gradient-x 5s ease infinite; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
       `}</style>

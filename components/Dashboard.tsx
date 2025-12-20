@@ -5,9 +5,10 @@ import { Database, Clock, Cpu, AlertCircle, Trophy, Target } from 'lucide-react'
 interface DashboardProps {
   competition?: Competition; 
   memory: MemoryBlock[];
+  leaderboard?: any[];
 }
 
-const MemoryViewer: React.FC<DashboardProps> = ({ competition, memory = [] }) => {
+const MemoryViewer: React.FC<DashboardProps> = ({ competition, memory = [], leaderboard = [] }) => {
   if (!competition) {
     return (
       <div className="flex items-center justify-center h-full text-textMuted p-8">
@@ -58,7 +59,7 @@ const MemoryViewer: React.FC<DashboardProps> = ({ competition, memory = [] }) =>
         </div>
 
         {/* System Stats */}
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
            <div className="bg-surface p-4 rounded-xl border border-surfaceHighlight flex items-center gap-4">
               <div className="p-2 bg-blue-900/20 text-blue-400 rounded-lg">
                  <Trophy size={20} />
@@ -87,6 +88,39 @@ const MemoryViewer: React.FC<DashboardProps> = ({ competition, memory = [] }) =>
               </div>
            </div>
         </div>
+
+        {/* Leaderboard Section */}
+        {leaderboard.length > 0 && (
+          <div className="space-y-4">
+            <h2 className="text-lg font-semibold text-text flex items-center gap-2">
+              <Trophy size={20} className="text-yellow-500" />
+              Public Leaderboard
+            </h2>
+            <div className="bg-surface rounded-xl border border-surfaceHighlight overflow-hidden">
+              <table className="w-full text-sm text-left">
+                <thead className="bg-surfaceHighlight/30 text-[10px] uppercase font-bold text-textMuted tracking-widest">
+                  <tr>
+                    <th className="px-4 py-3">Rank</th>
+                    <th className="px-4 py-3">Team Name</th>
+                    <th className="px-4 py-3 text-right">Score</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-surfaceHighlight">
+                  {leaderboard.slice(0, 10).map((entry, i) => (
+                    <tr key={i} className="hover:bg-white/5 transition-colors">
+                      <td className="px-4 py-3 font-mono text-accent">#{entry.rank}</td>
+                      <td className="px-4 py-3 font-medium text-text">{entry.teamName}</td>
+                      <td className="px-4 py-3 text-right font-mono text-textMuted">{entry.score}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div className="p-3 bg-surfaceHighlight/10 text-center">
+                <p className="text-[10px] text-textMuted italic">Showing top 10 entries from Kaggle live data.</p>
+              </div>
+            </div>
+          </div>
+        )}
 
       </div>
     </div>
