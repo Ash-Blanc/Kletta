@@ -15,6 +15,18 @@ View your app in AI Studio: https://ai.studio/apps/drive/1pr9QYEeSen3CsLPsg9ewLP
 
 1. Install dependencies:
    `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+2. Create `.env.local` with any provider keys (all optional):
+
+   ```bash
+   VITE_GEMINI_API_KEY=your_gemini_key
+   VITE_OPENROUTER_API_KEY=your_openrouter_key
+   VITE_OPENAI_API_KEY=your_openai_key
+   VITE_DEFAULT_PROVIDER=gemini
+   ```
+
 3. Run the app:
    `npm run dev`
+
+### Provider Diagnostics
+
+Once inside the Settings panel you can run quick connection tests for Gemini, OpenRouter, and OpenAI. Each check sends a minimal request and reports success or detailed error feedback (missing key, network issue, etc.).

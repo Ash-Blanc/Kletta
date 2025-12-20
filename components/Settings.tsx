@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { KaggleCredentials, LLMKeys, AIProvider } from '../types';
-import { Settings as SettingsIcon, Key, ExternalLink, Check, LogOut, Shield, AlertCircle, Zap, Cpu, Trash2 } from 'lucide-react';
+import { Settings as SettingsIcon, Key, ExternalLink, Check, LogOut, Shield, Zap, Cpu, Loader2 } from 'lucide-react';
 import { clsx } from 'clsx';
+import { providerLabels, runProviderDiagnostic } from '../services/providerDiagnostics';
 
 interface SettingsProps {
   kaggleCreds: KaggleCredentials | null;
@@ -25,6 +26,11 @@ const Settings: React.FC<SettingsProps> = ({ kaggleCreds, onConnectKaggle, llmKe
   const [openRouterKey, setOpenRouterKey] = useState('');
   const [openAIKey, setOpenAIKey] = useState('');
   const [isLLMSaved, setIsLLMSaved] = useState(false);
+  const [diagnostics, setDiagnostics] = useState<Record<AIProvider, { status: 'idle' | 'running' | 'success' | 'error'; message?: string }>>({
+    gemini: { status: 'idle' },
+    openrouter: { status: 'idle' },
+    openai: { status: 'idle' },
+  });
 
   useEffect(() => {
     if (kaggleCreds) {
@@ -85,6 +91,38 @@ const Settings: React.FC<SettingsProps> = ({ kaggleCreds, onConnectKaggle, llmKe
     setTimeout(() => setIsLLMSaved(false), 3000);
   };
 
+  const handleRunDiagnostic = async (p: AIProvider) => {
+    setDiagnostics(prev => ({ ...prev, [p]: { status: 'running' } }));
+    try {
+      const message = await runProviderDiagnostic(p, {
+        provider: p,
+        gemini: geminiKey,
+        openRouter: openRouterKey,
+        openAI: openAIKey,
+      });
+      setDiagnostics(prev => ({ ...prev, [p]: { status: 'success', message } }));
+    } catch (error: any) {
+      setDiagnostics(prev => ({
+        ...prev,
+        [p]: { status: 'error', message: error?.message || 'Diagnostic failed.' },
+      }));
+    }
+  };
+
+  const renderDiagnosticStatus = (p: AIProvider) => {
+    const state = diagnostics[p];
+    if (!state || state.status === 'idle') return null;
+
+    const isSuccess = state.status === 'success';
+    const color = isSuccess ? 'text-green-400' : 'text-red-400';
+
+    return (
+      <p className={clsx('text-[11px] mt-2 leading-snug', color)}>
+        {isSuccess ? '✅' : '⚠️'} {state.message}
+      </p>
+    );
+  };
+
   return (
     <div className="flex-1 overflow-y-auto p-8 bg-background animate-fadeIn custom-scrollbar">
       <div className="max-w-3xl mx-auto space-y-10">
@@ -143,6 +181,30 @@ const Settings: React.FC<SettingsProps> = ({ kaggleCreds, onConnectKaggle, llmKe
                             />
                             <div className="absolute right-3 top-2.5 text-textMuted/30"><Zap size={14} /></div>
                         </div>
+                        <div className="flex items-center justify-between mt-3 text-[12px] text-textMuted">
+                            <span>Test {providerLabels.gemini}</span>
+                            <button
+                                type="button"
+                                onClick={() => handleRunDiagnostic('gemini')}
+                                disabled={diagnostics.gemini.status === 'running'}
+                                className={clsx(
+                                    "flex items-center gap-1.5 px-3 py-1 rounded-md border transition-colors",
+                                    diagnostics.gemini.status === 'running'
+                                        ? "border-surfaceHighlight text-textMuted"
+                                        : "border-accent/30 text-accent hover:bg-accent/10"
+                                )}
+                            >
+                                {diagnostics.gemini.status === 'running' ? (
+                                    <>
+                                        <Loader2 size={12} className="animate-spin" />
+                                        Testing…
+                                    </>
+                                ) : (
+                                    'Test Connection'
+                                )}
+                            </button>
+                        </div>
+                        {renderDiagnosticStatus('gemini')}
                     </div>
 
                     {/* OpenRouter */}
@@ -167,6 +229,30 @@ const Settings: React.FC<SettingsProps> = ({ kaggleCreds, onConnectKaggle, llmKe
                             <div className="absolute right-3 top-2.5 text-textMuted/30"><ExternalLink size={14} /></div>
                         </div>
                         <p className="text-[10px] text-textMuted mt-1 pl-1">Recommended for Claude 3.5 Sonnet or GPT-4o access.</p>
+                        <div className="flex items-center justify-between mt-3 text-[12px] text-textMuted">
+                            <span>Test {providerLabels.openrouter}</span>
+                            <button
+                                type="button"
+                                onClick={() => handleRunDiagnostic('openrouter')}
+                                disabled={diagnostics.openrouter.status === 'running'}
+                                className={clsx(
+                                    "flex items-center gap-1.5 px-3 py-1 rounded-md border transition-colors",
+                                    diagnostics.openrouter.status === 'running'
+                                        ? "border-surfaceHighlight text-textMuted"
+                                        : "border-purple-500/40 text-purple-300 hover:bg-purple-500/10"
+                                )}
+                            >
+                                {diagnostics.openrouter.status === 'running' ? (
+                                    <>
+                                        <Loader2 size={12} className="animate-spin" />
+                                        Testing…
+                                    </>
+                                ) : (
+                                    'Test Connection'
+                                )}
+                            </button>
+                        </div>
+                        {renderDiagnosticStatus('openrouter')}
                     </div>
 
                     {/* OpenAI */}
@@ -190,6 +276,30 @@ const Settings: React.FC<SettingsProps> = ({ kaggleCreds, onConnectKaggle, llmKe
                             />
                             <div className="absolute right-3 top-2.5 text-textMuted/30"><Shield size={14} /></div>
                         </div>
+                        <div className="flex items-center justify-between mt-3 text-[12px] text-textMuted">
+                            <span>Test {providerLabels.openai}</span>
+                            <button
+                                type="button"
+                                onClick={() => handleRunDiagnostic('openai')}
+                                disabled={diagnostics.openai.status === 'running'}
+                                className={clsx(
+                                    "flex items-center gap-1.5 px-3 py-1 rounded-md border transition-colors",
+                                    diagnostics.openai.status === 'running'
+                                        ? "border-surfaceHighlight text-textMuted"
+                                        : "border-green-500/40 text-green-300 hover:bg-green-500/10"
+                                )}
+                            >
+                                {diagnostics.openai.status === 'running' ? (
+                                    <>
+                                        <Loader2 size={12} className="animate-spin" />
+                                        Testing…
+                                    </>
+                                ) : (
+                                    'Test Connection'
+                                )}
+                            </button>
+                        </div>
+                        {renderDiagnosticStatus('openai')}
                     </div>
                 </div>
                 <div className="p-4 border-t border-surfaceHighlight bg-surfaceHighlight/5 flex justify-end">

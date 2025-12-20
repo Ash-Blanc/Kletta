@@ -7,10 +7,28 @@ import AgentsTeam from './components/AgentsTeam';
 import Settings from './components/Settings';
 import LandingPage from './components/LandingPage';
 import CreateCompetitionModal from './components/CreateCompetitionModal';
-import { Competition, ViewMode, Message, Resource, Task, MemoryBlock, AgentType, KaggleCredentials, LLMKeys, SearchFilters } from './types';
-import { Menu, Loader2, PanelRightClose, PanelRightOpen, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Competition, ViewMode, Message, Resource, Task, MemoryBlock, AgentType, KaggleCredentials, LLMKeys, SearchFilters, AIProvider } from './types';
+import { PanelRightClose, PanelRightOpen, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { clsx } from 'clsx';
 import { findCompetition, findResources } from './services/geminiService';
+import { FullScreenLoader, OverlayLoader } from './components/LoadingStates';
+
+const PROVIDER_OPTIONS: AIProvider[] = ['gemini', 'openrouter', 'openai'];
+
+const isAIProvider = (value: string | undefined): value is AIProvider =>
+  (value ? PROVIDER_OPTIONS.includes(value as AIProvider) : false);
+
+const getEnvDefaultKeys = (): LLMKeys => {
+  const envProvider = import.meta.env.VITE_DEFAULT_PROVIDER;
+  const provider = isAIProvider(envProvider) ? envProvider : 'gemini';
+
+  return {
+    provider,
+    gemini: import.meta.env.VITE_GEMINI_API_KEY || '',
+    openRouter: import.meta.env.VITE_OPENROUTER_API_KEY || '',
+    openAI: import.meta.env.VITE_OPENAI_API_KEY || '',
+  };
+};
 
 const App: React.FC = () => {
   const [competitions, setCompetitions] = useState<Competition[]>([]);
@@ -29,12 +47,7 @@ const App: React.FC = () => {
   
   // Credentials State
   const [kaggleCreds, setKaggleCreds] = useState<KaggleCredentials | null>(null);
-  const [llmKeys, setLlmKeys] = useState<LLMKeys>({
-    provider: 'gemini', // Default provider
-    gemini: process.env.API_KEY || '', 
-    openRouter: '',
-    openAI: ''
-  });
+  const [llmKeys, setLlmKeys] = useState<LLMKeys>(() => getEnvDefaultKeys());
 
   // Load Creds from local storage on mount
   useEffect(() => {
@@ -47,11 +60,11 @@ const App: React.FC = () => {
     if (storedKeys) {
       try { 
         const parsed = JSON.parse(storedKeys);
-        setLlmKeys(prev => ({ 
-            ...prev, 
-            ...parsed, 
-            gemini: parsed.gemini || prev.gemini,
-            provider: parsed.provider || 'gemini' 
+        setLlmKeys(prev => ({
+          provider: isAIProvider(parsed.provider) ? parsed.provider : prev.provider,
+          gemini: parsed.gemini ?? prev.gemini,
+          openRouter: parsed.openRouter ?? prev.openRouter,
+          openAI: parsed.openAI ?? prev.openAI,
         })); 
       } catch (e) { console.error("Failed to parse LLM keys"); }
     }
@@ -89,8 +102,15 @@ const App: React.FC = () => {
   };
 
   const handleUpdateLLMKeys = (newKeys: LLMKeys) => {
-    setLlmKeys(newKeys);
-    localStorage.setItem('kletta_llm_keys', JSON.stringify(newKeys));
+    const sanitized: LLMKeys = {
+      provider: isAIProvider(newKeys.provider) ? newKeys.provider : llmKeys.provider,
+      gemini: newKeys.gemini ?? '',
+      openRouter: newKeys.openRouter ?? '',
+      openAI: newKeys.openAI ?? '',
+    };
+
+    setLlmKeys(sanitized);
+    localStorage.setItem('kletta_llm_keys', JSON.stringify(sanitized));
   };
 
   const handleResetWorkspace = () => {
@@ -98,8 +118,8 @@ const App: React.FC = () => {
     localStorage.removeItem('kletta_llm_keys');
     localStorage.removeItem('kletta_kaggle_creds');
     
-    // Resetting keys to empty strings triggers re-render of LandingPage
-    setLlmKeys({ provider: 'gemini', gemini: '', openRouter: '', openAI: '' });
+    // Revert to environment defaults so teams can preconfigure shared creds
+    setLlmKeys(getEnvDefaultKeys());
     setKaggleCreds(null);
   };
 
@@ -248,14 +268,7 @@ How shall we proceed?`,
   };
 
   if (isLoading) {
-    return (
-      <div className="flex h-screen w-full items-center justify-center bg-background text-text">
-         <div className="flex flex-col items-center gap-4">
-            <Loader2 size={32} className="animate-spin text-accent" />
-            <span className="text-sm font-medium text-textMuted">Loading Kletta Workspace...</span>
-         </div>
-      </div>
-    );
+    return <FullScreenLoader message="Loading Kletta workspace…" subtext="Preparing agent memory, competitions, and resources." />;
   }
 
   // Check if user is "signed in" (has at least one key configured)
@@ -278,17 +291,7 @@ How shall we proceed?`,
       </button>
 
       {/* Global Overlay Loader for Search */}
-      {isSearching && (
-        <div className="fixed inset-0 z-[70] bg-black/50 backdrop-blur-sm flex items-center justify-center">
-           <div className="bg-surface p-6 rounded-xl border border-surfaceHighlight shadow-2xl flex flex-col items-center gap-4">
-              <Loader2 size={36} className="animate-spin text-accent" />
-              <div className="text-center">
-                <h3 className="text-lg font-semibold text-text">AI Working</h3>
-                <p className="text-sm text-textMuted">{loadingText}</p>
-              </div>
-           </div>
-        </div>
-      )}
+      {isSearching && <OverlayLoader message={loadingText} />}
 
       {/* Create Competition Modal */}
       <CreateCompetitionModal 

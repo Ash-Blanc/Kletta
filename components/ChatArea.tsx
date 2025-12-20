@@ -223,9 +223,16 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, activeCompetition, onSend
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-6">
         {messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full opacity-50 space-y-4">
-             <Bot size={48} className="text-accent" />
-             <p className="text-sm">Initialize Kletta agents for this competition...</p>
+          <div className="flex flex-col items-center justify-center h-full space-y-4 text-center">
+             <div className="w-16 h-16 rounded-full bg-surfaceHighlight/40 flex items-center justify-center">
+               <Bot size={28} className="text-accent" />
+             </div>
+             <div className="space-y-2">
+               <p className="text-sm font-medium text-text">Say hello to your agent team</p>
+               <p className="text-xs text-textMuted max-w-sm leading-relaxed">
+                 Use <code className="bg-black/20 px-1 py-0.5 rounded">@scout</code> to summarize rules, <code className="bg-black/20 px-1 py-0.5 rounded">@coder</code> for baseline code, or ask anything about {activeCompetition.name}.
+               </p>
+             </div>
           </div>
         ) : (
           messages.map((msg) => (
