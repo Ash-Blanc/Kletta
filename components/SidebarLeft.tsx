@@ -11,6 +11,7 @@ interface SidebarLeftProps {
   activeView: ViewMode;
   onViewChange: (view: ViewMode) => void;
   kaggleCreds: KaggleCredentials | null;
+  kaggleStatus?: { loaded: boolean; error?: string };
   onConnectKaggle?: (creds: KaggleCredentials | null) => void; 
   isCollapsed: boolean;
   onToggle: () => void;
@@ -26,6 +27,7 @@ const SidebarLeft: React.FC<SidebarLeftProps> = ({
   activeView,
   onViewChange,
   kaggleCreds,
+  kaggleStatus,
   isCollapsed,
   onToggle,
   onBackToLanding,
@@ -116,8 +118,24 @@ const SidebarLeft: React.FC<SidebarLeftProps> = ({
         
         <div className="space-y-1 w-full">
           {!isCollapsed && filteredCompetitions.length === 0 ? (
-            <div className="text-xs text-textMuted italic px-2 py-4 text-center border border-dashed border-surfaceHighlight rounded-md">
-              {competitions.length === 0 ? "No active competitions" : "No matches found"}
+            <div className="text-xs text-textMuted px-2 py-4 text-center border border-dashed border-surfaceHighlight rounded-md space-y-2">
+              {competitions.length === 0 ? (
+                kaggleStatus?.error ? (
+                  <>
+                    <p className="text-red-400/80">{kaggleStatus.error}</p>
+                    <button
+                      onClick={() => onViewChange('settings')}
+                      className="text-accent hover:underline text-[11px]"
+                    >
+                      Configure in Settings →
+                    </button>
+                  </>
+                ) : (
+                  <p className="italic">No competitions yet. Click + to join one.</p>
+                )
+              ) : (
+                <p className="italic">No matches found</p>
+              )}
             </div>
           ) : (
             filteredCompetitions.map(comp => (

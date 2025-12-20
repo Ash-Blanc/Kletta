@@ -3,6 +3,7 @@ import { KaggleCredentials, LLMKeys, AIProvider } from '../types';
 import { Settings as SettingsIcon, Key, ExternalLink, Check, LogOut, Shield, Zap, Cpu, Loader2 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { providerLabels, runProviderDiagnostic } from '../services/providerDiagnostics';
+import { testKaggleCredentials, KaggleError } from '../services/kaggleService';
 
 interface SettingsProps {
   kaggleCreds: KaggleCredentials | null;
@@ -31,6 +32,7 @@ const Settings: React.FC<SettingsProps> = ({ kaggleCreds, onConnectKaggle, llmKe
     openrouter: { status: 'idle' },
     openai: { status: 'idle' },
   });
+  const [kaggleDiagnostic, setKaggleDiagnostic] = useState<{ status: 'idle' | 'running' | 'success' | 'error'; message?: string }>({ status: 'idle' });
 
   useEffect(() => {
     if (kaggleCreds) {
@@ -76,7 +78,24 @@ const Settings: React.FC<SettingsProps> = ({ kaggleCreds, onConnectKaggle, llmKe
           onConnectKaggle(null);
           setUsernameInput('');
           setKeyInput('');
+          setKaggleDiagnostic({ status: 'idle' });
       }
+  };
+
+  const handleTestKaggle = async () => {
+    if (!usernameInput.trim() || !keyInput.trim()) {
+      setKaggleDiagnostic({ status: 'error', message: 'Enter username and key first.' });
+      return;
+    }
+
+    setKaggleDiagnostic({ status: 'running' });
+    try {
+      const message = await testKaggleCredentials({ username: usernameInput, key: keyInput });
+      setKaggleDiagnostic({ status: 'success', message });
+    } catch (error: any) {
+      const msg = error instanceof KaggleError ? error.message : 'Connection test failed.';
+      setKaggleDiagnostic({ status: 'error', message: msg });
+    }
   };
 
   // --- LLM Handlers ---
@@ -376,12 +395,41 @@ const Settings: React.FC<SettingsProps> = ({ kaggleCreds, onConnectKaggle, llmKe
                     </div>
                 </div>
 
+                {/* Kaggle Diagnostic Status */}
+                {kaggleDiagnostic.status !== 'idle' && (
+                  <div className={clsx(
+                    "px-6 py-3 border-t border-surfaceHighlight text-sm",
+                    kaggleDiagnostic.status === 'success' ? "text-green-400" : kaggleDiagnostic.status === 'error' ? "text-red-400" : "text-textMuted"
+                  )}>
+                    {kaggleDiagnostic.status === 'running' ? (
+                      <span className="flex items-center gap-2"><Loader2 size={14} className="animate-spin" /> Testing connection...</span>
+                    ) : (
+                      <span>{kaggleDiagnostic.status === 'success' ? '✅' : '⚠️'} {kaggleDiagnostic.message}</span>
+                    )}
+                  </div>
+                )}
+
                 <div className="p-6 border-t border-surfaceHighlight bg-surfaceHighlight/5 flex justify-between items-center">
-                    {kaggleCreds ? (
-                        <button onClick={handleDisconnectKaggle} className="text-red-400 hover:text-red-300 text-sm font-medium flex items-center gap-2">
-                            <LogOut size={16} /> Disconnect
-                        </button>
-                    ) : <div />}
+                    <div className="flex items-center gap-3">
+                      {kaggleCreds ? (
+                          <button onClick={handleDisconnectKaggle} className="text-red-400 hover:text-red-300 text-sm font-medium flex items-center gap-2">
+                              <LogOut size={16} /> Disconnect
+                          </button>
+                      ) : (
+                          <button
+                            type="button"
+                            onClick={handleTestKaggle}
+                            disabled={kaggleDiagnostic.status === 'running' || !usernameInput || !keyInput}
+                            className="text-blue-400 hover:text-blue-300 text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {kaggleDiagnostic.status === 'running' ? (
+                              <><Loader2 size={14} className="animate-spin" /> Testing...</>
+                            ) : (
+                              'Test Connection'
+                            )}
+                          </button>
+                      )}
+                    </div>
                     
                     <button 
                         onClick={handleSaveKaggle}

@@ -11,6 +11,7 @@ import { Competition, ViewMode, Message, Resource, Task, MemoryBlock, AgentType,
 import { PanelRightClose, PanelRightOpen, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { clsx } from 'clsx';
 import { findCompetition, findResources } from './services/geminiService';
+import { fetchUserCompetitions, searchCompetitions, searchDatasets, KaggleError } from './services/kaggleService';
 import { FullScreenLoader, OverlayLoader } from './components/LoadingStates';
 
 const PROVIDER_OPTIONS: AIProvider[] = ['gemini', 'openrouter', 'openai'];
@@ -44,6 +45,7 @@ const App: React.FC = () => {
   const [isSearching, setIsSearching] = useState(false);
   const [loadingText, setLoadingText] = useState('Consulting knowledge base...');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [kaggleStatus, setKaggleStatus] = useState<{ loaded: boolean; error?: string }>({ loaded: false });
   
   // Credentials State
   const [kaggleCreds, setKaggleCreds] = useState<KaggleCredentials | null>(null);
@@ -123,57 +125,63 @@ const App: React.FC = () => {
     setKaggleCreds(null);
   };
 
-  // Simulate initial data loading
+  // Load competitions from Kaggle on boot (or when creds change)
   useEffect(() => {
     const loadData = async () => {
-      // Simulate network delay
-      await new Promise(resolve => setTimeout(resolve, 800));
-      
-      // Load "fetched" data (simulated dynamic content)
-      const fetchedCompetitions: Competition[] = [
-        {
-          id: 'comp-1',
-          name: 'Child Mind Institute',
-          description: 'Detect sleep states',
-          url: 'https://www.kaggle.com/competitions/child-mind-institute-detect-sleep-states',
-          tags: ['Series Time', 'Rank: 120'],
-          lastActive: '2 hrs ago',
-          status: 'active'
+      // Small delay for smoother UX
+      await new Promise(resolve => setTimeout(resolve, 400));
+
+      // Reset workspace state for fresh load
+      setMessages([]);
+      setMemory([]);
+      setTasks([]);
+      setResources([]);
+
+      // Attempt to fetch competitions from Kaggle if creds exist
+      if (kaggleCreds) {
+        try {
+          const kaggleCompetitions = await fetchUserCompetitions(kaggleCreds);
+          if (kaggleCompetitions.length > 0) {
+            setCompetitions(kaggleCompetitions);
+            setActiveCompetitionId(kaggleCompetitions[0].id);
+            setKaggleStatus({ loaded: true });
+
+            // Welcome message referencing the first competition
+            const first = kaggleCompetitions[0];
+            setMessages([
+              {
+                id: 'init-msg',
+                role: 'agent',
+                agentType: AgentType.Scout,
+                content: `🔍 **Kletta Scout initialized.**\n\nI found ${kaggleCompetitions.length} competition(s) from Kaggle. Currently viewing **${first.name}**.\n\nUse \`@scout\` to analyze rules, \`@coder\` for baseline code, or ask anything about the competition.`,
+                timestamp: new Date(),
+              },
+            ]);
+          } else {
+            // Kaggle returned empty list
+            setCompetitions([]);
+            setActiveCompetitionId(null);
+            setKaggleStatus({ loaded: true });
+          }
+        } catch (err: any) {
+          console.warn('Kaggle fetch failed:', err);
+          const errorMsg = err instanceof KaggleError ? err.message : 'Failed to load competitions from Kaggle.';
+          setKaggleStatus({ loaded: false, error: errorMsg });
+          setCompetitions([]);
+          setActiveCompetitionId(null);
         }
-      ];
-
-      setCompetitions(fetchedCompetitions);
-      setActiveCompetitionId(fetchedCompetitions[0].id);
-      
-      setMessages([
-         {
-            id: 'init-msg',
-            role: 'agent',
-            agentType: AgentType.Scout,
-            content: "🔍 **Kletta Scout initialized.** I've detected the 'Child Mind Institute' competition. Ready to analyze the dataset and rules.",
-            timestamp: new Date()
-         }
-      ]);
-      
-      setMemory([
-         { label: 'Competition Rules', value: 'Goal: Detect sleep states from wrist-worn accelerometer data. Metric: Macro F1 Score.', lastUpdated: 'Now' },
-         { label: 'Current Strategy', value: 'EDA on training data, establishing XGBoost baseline.', lastUpdated: 'Now' }
-      ]);
-      
-      setTasks([
-         { id: 't1', title: 'Download & Inspect Data', status: 'completed' },
-         { id: 't2', title: 'Feature Engineering (Rolling stats)', status: 'in-progress' }
-      ]);
-
-      setResources([
-         { id: 'r1', title: 'Sleep State Detection Papers', type: 'paper', summary: 'Key papers on accelerometer-based sleep staging.' }
-      ]);
+      } else {
+        // No Kaggle creds — start with empty state
+        setCompetitions([]);
+        setActiveCompetitionId(null);
+        setKaggleStatus({ loaded: false, error: 'Kaggle credentials not configured.' });
+      }
 
       setIsLoading(false);
     };
 
     loadData();
-  }, []);
+  }, [kaggleCreds]);
 
   const activeCompetition = competitions.find(c => c.id === activeCompetitionId);
 
@@ -189,40 +197,57 @@ const App: React.FC = () => {
     setLoadingText('Scouting Competition...');
     setIsSearching(true);
 
+    let newComp: Competition | null = null;
+    let sourceLabel = 'AI';
+
     try {
-      // Pass keys for fallback support
-      const details = await findCompetition(query, llmKeys);
-      
-      const newId = `comp-${Date.now()}`;
-      const newComp: Competition = {
-         id: newId,
-         name: details?.name || query,
-         description: details?.description || 'Initialized via search',
-         url: details?.url || `https://www.kaggle.com/search?q=${encodeURIComponent(query)}`,
-         tags: details?.tags || ['New'],
-         lastActive: 'Just now',
-         status: 'active'
-      };
-      
-      setCompetitions(prev => [newComp, ...prev]);
-      setActiveCompetitionId(newId);
-      
+      // 1. Try Kaggle search first if credentials exist
+      if (kaggleCreds) {
+        try {
+          const kaggleResults = await searchCompetitions(query, kaggleCreds);
+          if (kaggleResults.length > 0) {
+            newComp = kaggleResults[0];
+            sourceLabel = 'Kaggle';
+          }
+        } catch (kaggleErr) {
+          console.warn('Kaggle competition search failed, falling back to AI:', kaggleErr);
+        }
+      }
+
+      // 2. Fallback to AI-based search if Kaggle didn't return results
+      if (!newComp) {
+        const details = await findCompetition(query, llmKeys);
+        const newId = `comp-${Date.now()}`;
+        newComp = {
+          id: newId,
+          name: details?.name || query,
+          description: details?.description || 'Initialized via search',
+          url: details?.url || `https://www.kaggle.com/search?q=${encodeURIComponent(query)}`,
+          tags: details?.tags || ['New'],
+          lastActive: 'Just now',
+          status: 'active',
+        };
+      }
+
+      setCompetitions(prev => [newComp!, ...prev]);
+      setActiveCompetitionId(newComp.id);
+
       // Reset Workspace State
       setResources([]);
       setTasks([]);
       setMemory([{ label: 'Status', value: `Initializing environment for ${newComp.name}...`, lastUpdated: 'Now' }]);
-      
+
       // Initial message from Scout
       const initialMsg: Message = {
         id: Date.now().toString(),
         role: 'agent',
         agentType: AgentType.Scout,
-        content: `🔍 **Kletta Scout Report**
-        
+        content: `🔍 **Kletta Scout Report** _(via ${sourceLabel})_
+
 I have successfully identified and linked the competition:
 **[${newComp.name}](${newComp.url})**
 
-${details?.description || ''}
+${newComp.description}
 
 I am now ready to:
 1. Parse the official rules and evaluation metric.
@@ -230,16 +255,16 @@ I am now ready to:
 3. Suggest a research direction.
 
 How shall we proceed?`,
-        timestamp: new Date()
+        timestamp: new Date(),
       };
       setMessages([initialMsg]);
 
       if (window.innerWidth < 768) {
-         setLeftSidebarOpen(false);
+        setLeftSidebarOpen(false);
       }
     } catch (error) {
-      console.error("Failed to fetch competition", error);
-      alert("Failed to find competition details. Please ensure at least one AI provider (Gemini, OpenRouter, or OpenAI) is configured in Settings.");
+      console.error('Failed to fetch competition', error);
+      alert('Failed to find competition details. Please ensure Kaggle credentials or at least one AI provider is configured in Settings.');
     } finally {
       setIsSearching(false);
     }
@@ -251,19 +276,37 @@ How shall we proceed?`,
     setLoadingText(`Researching resources for "${filters.topic}"...`);
     setIsSearching(true);
 
+    const allResults: Resource[] = [];
+
     try {
-        // Pass keys for fallback support
-        const newResources = await findResources(filters, llmKeys);
-        if (newResources.length > 0) {
-            setResources(prev => [...newResources, ...prev]);
-        } else {
-            alert("No resources found. Please try a different query.");
+      // 1. Search Kaggle datasets if credentials exist
+      if (kaggleCreds) {
+        try {
+          const kaggleDatasets = await searchDatasets(filters.topic, kaggleCreds);
+          allResults.push(...kaggleDatasets);
+        } catch (kaggleErr) {
+          console.warn('Kaggle dataset search failed:', kaggleErr);
         }
+      }
+
+      // 2. Search via AI (papers/libraries)
+      try {
+        const aiResources = await findResources(filters, llmKeys);
+        allResults.push(...aiResources);
+      } catch (aiErr) {
+        console.warn('AI resource search failed:', aiErr);
+      }
+
+      if (allResults.length > 0) {
+        setResources(prev => [...allResults, ...prev]);
+      } else {
+        alert('No resources found. Please try a different query.');
+      }
     } catch (error) {
-        console.error("Failed to add resource", error);
-        alert("Failed to search for resources.");
+      console.error('Failed to add resource', error);
+      alert('Failed to search for resources.');
     } finally {
-        setIsSearching(false);
+      setIsSearching(false);
     }
   };
 
@@ -319,6 +362,7 @@ How shall we proceed?`,
               activeView={activeView}
               onViewChange={setActiveView}
               kaggleCreds={kaggleCreds}
+              kaggleStatus={kaggleStatus}
               isCollapsed={!leftSidebarOpen}
               onToggle={() => setLeftSidebarOpen(!leftSidebarOpen)}
               onBackToLanding={handleResetWorkspace}
