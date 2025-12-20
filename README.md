@@ -10,11 +10,10 @@ View your app in AI Studio: https://ai.studio/apps/drive/1pr9QYEeSen3CsLPsg9ewLP
 
 ## Run Locally
 
-**Prerequisites:**  Node.js
-
+**Prerequisites:** [Bun](https://bun.sh)
 
 1. Install dependencies:
-   `npm install`
+   `bun install`
 2. Create `.env.local` with any provider keys (all optional):
 
    ```bash
@@ -25,7 +24,7 @@ View your app in AI Studio: https://ai.studio/apps/drive/1pr9QYEeSen3CsLPsg9ewLP
    ```
 
 3. Run the app:
-   `npm run dev`
+   `bun run dev`
 
 ### Provider Diagnostics
 
@@ -33,7 +32,7 @@ Once inside the Settings panel you can run quick connection tests for Gemini, Op
 
 ## Kaggle Integration
 
-Kletta connects to the Kaggle API to fetch your competitions and search for datasets.
+Kletta connects to the Kaggle API via a local Bun proxy to fetch your competitions and search for datasets.
 
 ### Setup
 
@@ -48,7 +47,5 @@ Kletta connects to the Kaggle API to fetch your competitions and search for data
 - **Competition search**: When joining a new competition, Kletta queries Kaggle first (falls back to AI if no results)
 - **Dataset discovery**: Resource searches include Kaggle datasets alongside AI-suggested papers and libraries
 
-### Limitations
-
-- **CORS**: Browser-based requests to `kaggle.com/api/v1` may be blocked by CORS. If you see "Unable to reach Kaggle API" errors, the Kaggle API doesn't allow direct browser access. A backend proxy would be needed for full functionality.
-- **Rate limits**: Kaggle API has usage limits; excessive requests may be throttled.
+### Solved: CORS
+Kletta uses a built-in proxy server (`server.ts`) to bypass browser-based CORS restrictions when communicating with the Kaggle API. This ensures full functionality without requiring external browser extensions.

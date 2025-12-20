@@ -1,20 +1,42 @@
 import React, { useState } from 'react';
 import { Resource, Task, SearchFilters } from '../types';
-import { FileText, CheckSquare, Layers, Link as LinkIcon, AlertCircle, Box, Database, Plus, Filter, Search, X, Star, Calendar, Code } from 'lucide-react';
+import { 
+  FileText, CheckSquare, Layers, Link as LinkIcon, 
+  Box, Database, Plus, Search, X, Star, 
+  Calendar, Code, Trash2, CheckCircle2, Circle, 
+  Clock, GripVertical, ChevronDown, ChevronUp
+} from 'lucide-react';
 import { clsx } from 'clsx';
 
 interface SidebarRightProps {
   resources: Resource[];
   tasks: Task[];
   onAddResource: (filters: SearchFilters) => void;
+  onAddTask: (title: string) => void;
+  onUpdateTask: (id: string, updates: Partial<Task>) => void;
+  onDeleteTask: (id: string) => void;
+  onDeleteResource: (id: string) => void;
   className?: string;
 }
 
-const SidebarRight: React.FC<SidebarRightProps> = ({ resources = [], tasks = [], onAddResource, className }) => {
+const SidebarRight: React.FC<SidebarRightProps> = ({ 
+  resources = [], 
+  tasks = [], 
+  onAddResource, 
+  onAddTask,
+  onUpdateTask,
+  onDeleteTask,
+  onDeleteResource,
+  className 
+}) => {
   const [activeFilter, setActiveFilter] = useState<'all' | 'paper' | 'library' | 'dataset'>('all');
   
-  // Search State
-  const [isAdding, setIsAdding] = useState(false);
+  // States
+  const [isAddingResource, setIsAddingResource] = useState(false);
+  const [isAddingTask, setIsAddingTask] = useState(false);
+  const [newTaskTitle, setNewTaskTitle] = useState('');
+  
+  // Resource Search State
   const [topic, setTopic] = useState('');
   const [language, setLanguage] = useState('');
   const [minStars, setMinStars] = useState('');
@@ -42,7 +64,7 @@ const SidebarRight: React.FC<SidebarRightProps> = ({ resources = [], tasks = [],
     }
   };
 
-  const handleSearchSubmit = (e: React.FormEvent) => {
+  const handleResourceSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!topic.trim()) return;
 
@@ -53,146 +75,210 @@ const SidebarRight: React.FC<SidebarRightProps> = ({ resources = [], tasks = [],
         lastUpdated: lastUpdated.trim() || undefined
     });
     
-    // Reset form but keep expanded to show loading state via parent if we wanted, 
-    // but app logic currently handles global loading state.
-    // We'll close it to keep UI clean.
-    setIsAdding(false);
+    setIsAddingResource(false);
     setTopic('');
     setLanguage('');
     setMinStars('');
     setLastUpdated('');
   };
 
+  const handleTaskSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTaskTitle.trim()) return;
+    onAddTask(newTaskTitle.trim());
+    setNewTaskTitle('');
+    setIsAddingTask(false);
+  };
+
+  const toggleTaskStatus = (task: Task) => {
+    const nextStatus: Task['status'] = 
+      task.status === 'pending' ? 'in-progress' :
+      task.status === 'in-progress' ? 'completed' : 'pending';
+    
+    onUpdateTask(task.id, { status: nextStatus });
+  };
+
+  const completedTasks = tasks.filter(t => t.status === 'completed').length;
+  const progress = tasks.length > 0 ? (completedTasks / tasks.length) * 100 : 0;
+
   return (
-    <div className={clsx("flex flex-col h-full", className)}>
+    <div className={clsx("flex flex-col h-full bg-surface border-l border-surfaceHighlight animate-in fade-in slide-in-from-right-4 duration-500", className)}>
       
-      {/* Active Tasks */}
       <div className="flex-1 overflow-y-auto p-4 custom-scrollbar space-y-8">
         
+        {/* Active Plan Section */}
         <div className="space-y-4">
-          <div className="flex items-center justify-between text-textMuted mb-2">
-            <div className="flex items-center gap-2">
-                <CheckSquare size={16} />
-                <h3 className="text-xs font-semibold uppercase tracking-wider">Active Plan</h3>
+          <div className="flex items-center justify-between group/header">
+            <div className="flex items-center gap-2 text-textMuted">
+                <CheckSquare size={16} className="text-accent" />
+                <h3 className="text-xs font-bold uppercase tracking-widest">Active Plan</h3>
             </div>
-            <button className="text-textMuted hover:text-accent transition-colors">
+            <button 
+              onClick={() => setIsAddingTask(!isAddingTask)}
+              className={clsx(
+                "p-1 rounded-md transition-all",
+                isAddingTask ? "bg-accent/10 text-accent rotate-45" : "text-textMuted hover:bg-surfaceHighlight/50 hover:text-text"
+              )}
+            >
                 <Plus size={14} />
             </button>
           </div>
-          <div className="space-y-2">
+
+          {tasks.length > 0 && (
+            <div className="space-y-1.5">
+              <div className="flex justify-between items-center text-[10px] uppercase font-bold text-textMuted px-1">
+                <span>Progress</span>
+                <span>{Math.round(progress)}%</span>
+              </div>
+              <div className="h-1.5 w-full bg-surfaceHighlight rounded-full overflow-hidden shadow-inner">
+                <div 
+                  className="h-full bg-accent transition-all duration-500 ease-out shadow-[0_0_8px_rgba(32,190,255,0.5)]" 
+                  style={{ width: `${progress}%` }} 
+                />
+              </div>
+            </div>
+          )}
+
+          {isAddingTask && (
+            <form onSubmit={handleTaskSubmit} className="animate-in zoom-in-95 duration-200">
+              <input 
+                type="text"
+                placeholder="New objective..."
+                value={newTaskTitle}
+                onChange={(e) => setNewTaskTitle(e.target.value)}
+                autoFocus
+                className="w-full bg-black/20 border border-accent/30 rounded-lg px-3 py-2 text-sm text-text placeholder:text-textMuted/50 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/20 transition-all shadow-inner"
+              />
+            </form>
+          )}
+
+          <div className="space-y-1.5">
             {tasks.length === 0 ? (
-              <div className="text-xs text-textMuted italic p-2">No active tasks</div>
+              <div className="flex flex-col items-center justify-center py-6 px-4 border border-dashed border-surfaceHighlight rounded-xl bg-surfaceHighlight/5">
+                <Clock size={20} className="text-textMuted/30 mb-2" />
+                <p className="text-[11px] text-textMuted text-center leading-relaxed">Your agent team will populate this roadmap as research progresses.</p>
+              </div>
             ) : (
               tasks.map(task => (
-                <div key={task.id} className="flex items-start gap-3 p-2 rounded hover:bg-surfaceHighlight/20 transition-colors group">
+                <div key={task.id} className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-surfaceHighlight/30 transition-all group border border-transparent hover:border-surfaceHighlight/50">
+                  <button 
+                    onClick={() => toggleTaskStatus(task)}
+                    className={clsx(
+                      "flex-shrink-0 transition-colors",
+                      task.status === 'completed' ? "text-accent" : 
+                      task.status === 'in-progress' ? "text-yellow-500" : "text-textMuted/40 hover:text-textMuted"
+                    )}
+                  >
+                    {task.status === 'completed' ? <CheckCircle2 size={18} /> : 
+                     task.status === 'in-progress' ? <Circle size={18} className="animate-pulse fill-yellow-500/10" /> : 
+                     <Circle size={18} />}
+                  </button>
+                  
                   <div className={clsx(
-                    "w-4 h-4 rounded border flex items-center justify-center mt-0.5 transition-colors",
-                    task.status === 'completed' ? "bg-accent border-accent" : 
-                    task.status === 'in-progress' ? "border-accent" : "border-textMuted/50 group-hover:border-textMuted"
-                  )}>
-                    {task.status === 'completed' && <div className="w-2 h-2 bg-white rounded-[1px]" />}
-                    {task.status === 'in-progress' && <div className="w-2 h-2 bg-accent rounded-full animate-pulse" />}
-                  </div>
-                  <div className={clsx(
-                    "text-sm transition-all",
-                    task.status === 'completed' ? "text-textMuted line-through" : "text-text"
+                    "flex-1 text-sm transition-all truncate",
+                    task.status === 'completed' ? "text-textMuted/50 line-through italic" : "text-text"
                   )}>
                     {task.title}
                   </div>
+
+                  <button 
+                    onClick={() => onDeleteTask(task.id)}
+                    className="opacity-0 group-hover:opacity-100 p-1 text-textMuted hover:text-red-400 transition-all"
+                  >
+                    <Trash2 size={14} />
+                  </button>
                 </div>
               ))
             )}
           </div>
         </div>
 
-        <div className="h-px bg-surfaceHighlight w-full"></div>
+        <div className="h-px bg-gradient-to-r from-transparent via-surfaceHighlight to-transparent w-full"></div>
 
-        {/* Resources */}
+        {/* Resources Section */}
         <div className="space-y-4">
-          <div className="flex items-center justify-between text-textMuted mb-2">
-            <div className="flex items-center gap-2">
-                <Layers size={16} />
-                <h3 className="text-xs font-semibold uppercase tracking-wider">Resources</h3>
+          <div className="flex items-center justify-between group/header">
+            <div className="flex items-center gap-2 text-textMuted">
+                <Layers size={16} className="text-purple-400" />
+                <h3 className="text-xs font-bold uppercase tracking-widest">Resources</h3>
             </div>
             <button 
-                onClick={() => setIsAdding(!isAdding)}
-                className={clsx("transition-colors", isAdding ? "text-accent" : "text-textMuted hover:text-accent")} 
+                onClick={() => setIsAddingResource(!isAddingResource)}
+                className={clsx(
+                  "p-1 rounded-md transition-all",
+                  isAddingResource ? "bg-accent/10 text-accent" : "text-textMuted hover:bg-surfaceHighlight/50 hover:text-text"
+                )} 
                 title="Find New Resource"
             >
-                {isAdding ? <X size={14} /> : <Plus size={14} />}
+                {isAddingResource ? <X size={14} /> : <Plus size={14} />}
             </button>
           </div>
 
           {/* Search Form */}
-          {isAdding && (
-              <form onSubmit={handleSearchSubmit} className="bg-surfaceHighlight/20 p-3 rounded-lg border border-surfaceHighlight/50 space-y-3 animate-in fade-in slide-in-from-top-2">
+          {isAddingResource && (
+              <form onSubmit={handleResourceSubmit} className="bg-surfaceHighlight/20 p-4 rounded-xl border border-surfaceHighlight/50 space-y-4 animate-in slide-in-from-top-4 duration-300 shadow-xl backdrop-blur-sm">
                   <div className="relative">
-                      <Search className="absolute left-2.5 top-2.5 text-textMuted" size={12} />
+                      <Search className="absolute left-3 top-3 text-textMuted" size={14} />
                       <input 
                           type="text" 
-                          placeholder="Search topic..." 
+                          placeholder="What should I research?" 
                           value={topic}
                           onChange={(e) => setTopic(e.target.value)}
                           autoFocus
-                          className="w-full bg-black/20 border border-surfaceHighlight rounded-md py-1.5 pl-8 pr-2 text-xs text-text focus:outline-none focus:border-accent"
+                          className="w-full bg-black/40 border border-surfaceHighlight rounded-lg py-2.5 pl-10 pr-3 text-sm text-text focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/20 transition-all"
                       />
                   </div>
                   
-                  <div className="grid grid-cols-2 gap-2">
-                      <div className="relative">
-                          <Code className="absolute left-2 top-2 text-textMuted" size={12} />
-                          <input 
-                              type="text" 
-                              placeholder="Lang (e.g. Python)"
-                              value={language}
-                              onChange={(e) => setLanguage(e.target.value)}
-                              className="w-full bg-black/20 border border-surfaceHighlight rounded-md py-1.5 pl-7 pr-2 text-[11px] text-text focus:outline-none focus:border-accent"
-                          />
+                  <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                          <label className="text-[10px] uppercase font-bold text-textMuted ml-1">Language</label>
+                          <div className="relative">
+                              <Code className="absolute left-2.5 top-2.5 text-textMuted/50" size={12} />
+                              <input 
+                                  type="text" 
+                                  placeholder="Python..."
+                                  value={language}
+                                  onChange={(e) => setLanguage(e.target.value)}
+                                  className="w-full bg-black/20 border border-surfaceHighlight rounded-lg py-2 pl-8 pr-2 text-[11px] text-text focus:outline-none focus:border-accent"
+                              />
+                          </div>
                       </div>
-                      <div className="relative">
-                          <Star className="absolute left-2 top-2 text-textMuted" size={12} />
-                          <input 
-                              type="number" 
-                              placeholder="Min Stars"
-                              value={minStars}
-                              onChange={(e) => setMinStars(e.target.value)}
-                              className="w-full bg-black/20 border border-surfaceHighlight rounded-md py-1.5 pl-7 pr-2 text-[11px] text-text focus:outline-none focus:border-accent"
-                          />
+                      <div className="space-y-1">
+                          <label className="text-[10px] uppercase font-bold text-textMuted ml-1">Min Stars</label>
+                          <div className="relative">
+                              <Star className="absolute left-2.5 top-2.5 text-textMuted/50" size={12} />
+                              <input 
+                                  type="number" 
+                                  placeholder="100+"
+                                  value={minStars}
+                                  onChange={(e) => setMinStars(e.target.value)}
+                                  className="w-full bg-black/20 border border-surfaceHighlight rounded-lg py-2 pl-8 pr-2 text-[11px] text-text focus:outline-none focus:border-accent"
+                              />
+                          </div>
                       </div>
-                  </div>
-
-                  <div className="relative">
-                       <Calendar className="absolute left-2 top-2 text-textMuted" size={12} />
-                       <input 
-                           type="text" 
-                           placeholder="Updated (e.g. 2024)"
-                           value={lastUpdated}
-                           onChange={(e) => setLastUpdated(e.target.value)}
-                           className="w-full bg-black/20 border border-surfaceHighlight rounded-md py-1.5 pl-7 pr-2 text-[11px] text-text focus:outline-none focus:border-accent"
-                       />
                   </div>
 
                   <button 
                       type="submit" 
                       disabled={!topic.trim()}
-                      className="w-full bg-accent hover:bg-accentHover text-white text-xs font-medium py-1.5 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full bg-accent hover:bg-accentHover text-white text-sm font-bold py-2.5 rounded-lg transition-all shadow-lg shadow-accent/20 disabled:opacity-50 disabled:cursor-not-allowed hover:-translate-y-0.5 active:translate-y-0"
                   >
-                      Search Resources
+                      Query Knowledge Base
                   </button>
               </form>
           )}
 
           {/* Filter Tabs */}
-          {!isAdding && (
-            <div className="flex gap-2 pb-2 overflow-x-auto custom-scrollbar">
+          {!isAddingResource && resources.length > 0 && (
+            <div className="flex gap-2 pb-1 overflow-x-auto no-scrollbar">
                 {['all', 'paper', 'library', 'dataset'].map((f) => (
                     <button
                         key={f}
                         onClick={() => setActiveFilter(f as any)}
                         className={clsx(
-                            "px-2.5 py-1 text-[10px] uppercase font-medium rounded-full border transition-all whitespace-nowrap",
+                            "px-3 py-1.5 text-[10px] uppercase font-bold rounded-full border transition-all whitespace-nowrap tracking-wider",
                             activeFilter === f 
-                                ? "bg-accent/10 border-accent/50 text-accent" 
+                                ? "bg-accent/10 border-accent/50 text-accent shadow-sm" 
                                 : "bg-transparent border-surfaceHighlight text-textMuted hover:border-textMuted"
                         )}
                     >
@@ -204,60 +290,73 @@ const SidebarRight: React.FC<SidebarRightProps> = ({ resources = [], tasks = [],
 
           <div className="space-y-3">
             {filteredResources.length === 0 ? (
-               <div className="text-xs text-textMuted italic p-4 text-center border border-dashed border-surfaceHighlight rounded-lg">
-                 {resources.length === 0 ? "No resources collected" : "No matches found"}
+               <div className="flex flex-col items-center justify-center py-10 px-4 border border-dashed border-surfaceHighlight rounded-xl bg-surfaceHighlight/5 text-center">
+                 <Database size={24} className="text-textMuted/30 mb-3" />
+                 <p className="text-xs text-textMuted">
+                   {resources.length === 0 ? "No specialized resources have been indexed for this workspace yet." : "No matching resources found for this filter."}
+                 </p>
                </div>
             ) : (
               filteredResources.map(res => (
-                <a 
+                <div 
                     key={res.id} 
-                    href={res.url || '#'}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block p-3 bg-surfaceHighlight/20 rounded-lg border border-surfaceHighlight/50 hover:border-accent/50 hover:bg-surfaceHighlight/40 transition-all cursor-pointer group"
+                    className="group relative block p-4 bg-surfaceHighlight/15 rounded-xl border border-surfaceHighlight/40 hover:border-accent/40 hover:bg-surfaceHighlight/25 transition-all cursor-default shadow-sm"
                 >
                   <div className="flex items-start justify-between mb-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                        <div className={clsx("p-1.5 rounded-md border flex-shrink-0", getBadgeColor(res.type))}>
+                    <a 
+                      href={res.url || '#'}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2.5 min-w-0 flex-1 hover:text-accent transition-colors"
+                    >
+                        <div className={clsx("p-2 rounded-lg border flex-shrink-0 shadow-sm", getBadgeColor(res.type))}>
                             {getResourceIcon(res.type)}
                         </div>
-                        <div className="text-sm font-medium text-text truncate group-hover:text-accent transition-colors">{res.title}</div>
-                    </div>
-                    {res.url && <LinkIcon size={12} className="text-textMuted group-hover:text-accent opacity-0 group-hover:opacity-100 transition-all" />}
+                        <div className="text-sm font-bold text-text truncate pr-2">{res.title}</div>
+                        {res.url && <LinkIcon size={12} className="text-textMuted/50 group-hover:text-accent transition-colors" />}
+                    </a>
+                    
+                    <button 
+                      onClick={() => onDeleteResource(res.id)}
+                      className="p-1.5 text-textMuted hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all rounded-md hover:bg-red-500/10"
+                      title="Remove Resource"
+                    >
+                      <Trash2 size={14} />
+                    </button>
                   </div>
                   
                   {res.summary && (
-                      <div className="text-xs text-textMuted/80 line-clamp-2 pl-[34px] mb-2 leading-relaxed">
+                      <div className="text-[11px] text-textMuted/80 line-clamp-3 mb-3 leading-relaxed border-l-2 border-surfaceHighlight/50 pl-3">
                         {res.summary}
                       </div>
                   )}
 
-                  <div className="flex flex-wrap gap-2 pl-[34px]">
-                    <span className={clsx("text-[9px] px-1.5 py-0.5 rounded border uppercase tracking-wide font-medium", getBadgeColor(res.type))}>
+                  <div className="flex flex-wrap gap-2 items-center">
+                    <span className={clsx("text-[9px] px-2 py-0.5 rounded-full border uppercase tracking-widest font-black shadow-sm", getBadgeColor(res.type))}>
                       {res.type}
                     </span>
                     
                     {/* Metadata Badges */}
                     {res.metadata?.stars && (
-                        <span className="text-[9px] px-1.5 py-0.5 rounded border border-surfaceHighlight bg-surfaceHighlight/30 text-textMuted flex items-center gap-1">
-                            <Star size={8} className="fill-current" />
-                            {res.metadata.stars}
-                        </span>
+                        <div className="flex items-center gap-1 text-[10px] text-textMuted bg-black/20 px-2 py-0.5 rounded-full border border-surfaceHighlight/50 shadow-inner">
+                            <Star size={10} className="fill-yellow-500 text-yellow-500" />
+                            <span className="font-mono">{res.metadata.stars}</span>
+                        </div>
                     )}
                     {res.metadata?.language && (
-                        <span className="text-[9px] px-1.5 py-0.5 rounded border border-surfaceHighlight bg-surfaceHighlight/30 text-textMuted flex items-center gap-1">
-                            <Code size={8} />
-                            {res.metadata.language}
-                        </span>
+                        <div className="flex items-center gap-1 text-[10px] text-textMuted bg-black/20 px-2 py-0.5 rounded-full border border-surfaceHighlight/50 shadow-inner">
+                            <Code size={10} className="text-accent" />
+                            <span>{res.metadata.language}</span>
+                        </div>
                     )}
                     {res.metadata?.updated && (
-                        <span className="text-[9px] px-1.5 py-0.5 rounded border border-surfaceHighlight bg-surfaceHighlight/30 text-textMuted flex items-center gap-1">
-                            <Calendar size={8} />
-                            {res.metadata.updated}
-                        </span>
+                        <div className="flex items-center gap-1 text-[10px] text-textMuted bg-black/20 px-2 py-0.5 rounded-full border border-surfaceHighlight/50 shadow-inner">
+                            <Calendar size={10} />
+                            <span>{res.metadata.updated}</span>
+                        </div>
                     )}
                   </div>
-                </a>
+                </div>
               ))
             )}
           </div>

@@ -14,13 +14,15 @@ export interface KaggleCredentials {
   key: string;
 }
 
-export type AIProvider = 'gemini' | 'openrouter' | 'openai';
+export type AIProvider = 'gemini' | 'openrouter' | 'openai' | 'cerebras' | 'groq';
 
 export interface LLMKeys {
   provider: AIProvider;
   gemini?: string;
   openRouter?: string;
   openAI?: string;
+  cerebras?: string;
+  groq?: string;
 }
 
 export interface Message {

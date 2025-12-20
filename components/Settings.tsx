@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { KaggleCredentials, LLMKeys, AIProvider } from '../types';
-import { Settings as SettingsIcon, Key, ExternalLink, Check, LogOut, Shield, Zap, Cpu, Loader2 } from 'lucide-react';
+import { Settings as SettingsIcon, Key, ExternalLink, Check, LogOut, Shield, Zap, Cpu, Loader2, Download, Upload, Database } from 'lucide-react';
 import { clsx } from 'clsx';
 import { providerLabels, runProviderDiagnostic } from '../services/providerDiagnostics';
 import { testKaggleCredentials, KaggleError } from '../services/kaggleService';
+import { exportWorkspace, importWorkspace, WorkspaceExport } from '../services/storageService';
 
 interface SettingsProps {
   kaggleCreds: KaggleCredentials | null;
@@ -26,13 +27,20 @@ const Settings: React.FC<SettingsProps> = ({ kaggleCreds, onConnectKaggle, llmKe
   const [geminiKey, setGeminiKey] = useState('');
   const [openRouterKey, setOpenRouterKey] = useState('');
   const [openAIKey, setOpenAIKey] = useState('');
+  const [cerebrasKey, setCerebrasKey] = useState('');
+  const [groqKey, setGroqKey] = useState('');
   const [isLLMSaved, setIsLLMSaved] = useState(false);
   const [diagnostics, setDiagnostics] = useState<Record<AIProvider, { status: 'idle' | 'running' | 'success' | 'error'; message?: string }>>({
     gemini: { status: 'idle' },
     openrouter: { status: 'idle' },
     openai: { status: 'idle' },
+    cerebras: { status: 'idle' },
+    groq: { status: 'idle' },
   });
   const [kaggleDiagnostic, setKaggleDiagnostic] = useState<{ status: 'idle' | 'running' | 'success' | 'error'; message?: string }>({ status: 'idle' });
+  const [exportStatus, setExportStatus] = useState<'idle' | 'exporting' | 'done'>('idle');
+  const [importStatus, setImportStatus] = useState<'idle' | 'importing' | 'done' | 'error'>('idle');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (kaggleCreds) {
@@ -49,6 +57,8 @@ const Settings: React.FC<SettingsProps> = ({ kaggleCreds, onConnectKaggle, llmKe
     setGeminiKey(llmKeys.gemini || '');
     setOpenRouterKey(llmKeys.openRouter || '');
     setOpenAIKey(llmKeys.openAI || '');
+    setCerebrasKey(llmKeys.cerebras || '');
+    setGroqKey(llmKeys.groq || '');
   }, [llmKeys]);
 
   // --- Kaggle Handlers ---
@@ -98,13 +108,71 @@ const Settings: React.FC<SettingsProps> = ({ kaggleCreds, onConnectKaggle, llmKe
     }
   };
 
+  // --- Export/Import Handlers ---
+  const handleExport = async () => {
+    setExportStatus('exporting');
+    try {
+      const data = await exportWorkspace();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `kletta-workspace-${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setExportStatus('done');
+      setTimeout(() => setExportStatus('idle'), 2000);
+    } catch (err) {
+      console.error('Export failed:', err);
+      setExportStatus('idle');
+    }
+  };
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setImportStatus('importing');
+    try {
+      const text = await file.text();
+      const data: WorkspaceExport = JSON.parse(text);
+
+      if (!data.version || !data.competitions) {
+        throw new Error('Invalid workspace file format');
+      }
+
+      await importWorkspace(data);
+      setImportStatus('done');
+
+      // Reload page to reflect imported data
+      setTimeout(() => window.location.reload(), 1000);
+    } catch (err) {
+      console.error('Import failed:', err);
+      setImportStatus('error');
+      setTimeout(() => setImportStatus('idle'), 3000);
+    }
+
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
   // --- LLM Handlers ---
   const handleSaveLLM = () => {
     onUpdateLLMKeys({
         provider: provider,
         gemini: geminiKey,
         openRouter: openRouterKey,
-        openAI: openAIKey
+        openAI: openAIKey,
+        cerebras: cerebrasKey,
+        groq: groqKey
     });
     setIsLLMSaved(true);
     setTimeout(() => setIsLLMSaved(false), 3000);
@@ -118,6 +186,8 @@ const Settings: React.FC<SettingsProps> = ({ kaggleCreds, onConnectKaggle, llmKe
         gemini: geminiKey,
         openRouter: openRouterKey,
         openAI: openAIKey,
+        cerebras: cerebrasKey,
+        groq: groqKey
       });
       setDiagnostics(prev => ({ ...prev, [p]: { status: 'success', message } }));
     } catch (error: any) {
@@ -320,6 +390,102 @@ const Settings: React.FC<SettingsProps> = ({ kaggleCreds, onConnectKaggle, llmKe
                         </div>
                         {renderDiagnosticStatus('openai')}
                     </div>
+
+                    {/* Cerebras */}
+                    <div className={clsx("p-4 rounded-lg border transition-all", provider === 'cerebras' ? "bg-blue-900/10 border-blue-500" : "border-transparent")}>
+                         <div className="flex items-center justify-between mb-2">
+                            <label className="block text-xs font-medium text-textMuted uppercase tracking-wide flex items-center gap-2 cursor-pointer" onClick={() => setProvider('cerebras')}>
+                                <div className={clsx("w-3 h-3 rounded-full border flex items-center justify-center", provider === 'cerebras' ? "border-blue-500" : "border-textMuted")}>
+                                    {provider === 'cerebras' && <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />}
+                                </div>
+                                <span>Cerebras</span>
+                            </label>
+                            {provider === 'cerebras' && <span className="text-[10px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded">Active</span>}
+                        </div>
+                        <div className="relative">
+                            <input 
+                                type="password" 
+                                value={cerebrasKey}
+                                onChange={(e) => setCerebrasKey(e.target.value)}
+                                placeholder="sk-..."
+                                className="w-full bg-black/20 border border-surfaceHighlight rounded-lg px-4 py-2.5 text-text text-sm focus:outline-none focus:border-blue-500 transition-all"
+                            />
+                            <div className="absolute right-3 top-2.5 text-textMuted/30"><Cpu size={14} /></div>
+                        </div>
+                        <p className="text-[10px] text-textMuted mt-1 pl-1">Uses Llama 3.3 70B via Cerebras Inference.</p>
+                        <div className="flex items-center justify-between mt-3 text-[12px] text-textMuted">
+                            <span>Test {providerLabels.cerebras}</span>
+                            <button
+                                type="button"
+                                onClick={() => handleRunDiagnostic('cerebras')}
+                                disabled={diagnostics.cerebras.status === 'running'}
+                                className={clsx(
+                                    "flex items-center gap-1.5 px-3 py-1 rounded-md border transition-colors",
+                                    diagnostics.cerebras.status === 'running'
+                                        ? "border-surfaceHighlight text-textMuted"
+                                        : "border-blue-500/40 text-blue-300 hover:bg-blue-500/10"
+                                )}
+                            >
+                                {diagnostics.cerebras.status === 'running' ? (
+                                    <>
+                                        <Loader2 size={12} className="animate-spin" />
+                                        Testing…
+                                    </>
+                                ) : (
+                                    'Test Connection'
+                                )}
+                            </button>
+                        </div>
+                        {renderDiagnosticStatus('cerebras')}
+                    </div>
+
+                    {/* Groq */}
+                    <div className={clsx("p-4 rounded-lg border transition-all", provider === 'groq' ? "bg-orange-900/10 border-orange-500" : "border-transparent")}>
+                         <div className="flex items-center justify-between mb-2">
+                            <label className="block text-xs font-medium text-textMuted uppercase tracking-wide flex items-center gap-2 cursor-pointer" onClick={() => setProvider('groq')}>
+                                <div className={clsx("w-3 h-3 rounded-full border flex items-center justify-center", provider === 'groq' ? "border-orange-500" : "border-textMuted")}>
+                                    {provider === 'groq' && <div className="w-1.5 h-1.5 rounded-full bg-orange-500" />}
+                                </div>
+                                <span>Groq</span>
+                            </label>
+                            {provider === 'groq' && <span className="text-[10px] bg-orange-500/20 text-orange-400 px-1.5 py-0.5 rounded">Active</span>}
+                        </div>
+                        <div className="relative">
+                            <input 
+                                type="password" 
+                                value={groqKey}
+                                onChange={(e) => setGroqKey(e.target.value)}
+                                placeholder="gsk_..."
+                                className="w-full bg-black/20 border border-surfaceHighlight rounded-lg px-4 py-2.5 text-text text-sm focus:outline-none focus:border-orange-500 transition-all"
+                            />
+                            <div className="absolute right-3 top-2.5 text-textMuted/30"><Zap size={14} /></div>
+                        </div>
+                        <p className="text-[10px] text-textMuted mt-1 pl-1">Uses Llama 3.3 70B Versatile.</p>
+                        <div className="flex items-center justify-between mt-3 text-[12px] text-textMuted">
+                            <span>Test {providerLabels.groq}</span>
+                            <button
+                                type="button"
+                                onClick={() => handleRunDiagnostic('groq')}
+                                disabled={diagnostics.groq.status === 'running'}
+                                className={clsx(
+                                    "flex items-center gap-1.5 px-3 py-1 rounded-md border transition-colors",
+                                    diagnostics.groq.status === 'running'
+                                        ? "border-surfaceHighlight text-textMuted"
+                                        : "border-orange-500/40 text-orange-300 hover:bg-orange-500/10"
+                                )}
+                            >
+                                {diagnostics.groq.status === 'running' ? (
+                                    <>
+                                        <Loader2 size={12} className="animate-spin" />
+                                        Testing…
+                                    </>
+                                ) : (
+                                    'Test Connection'
+                                )}
+                            </button>
+                        </div>
+                        {renderDiagnosticStatus('groq')}
+                    </div>
                 </div>
                 <div className="p-4 border-t border-surfaceHighlight bg-surfaceHighlight/5 flex justify-end">
                     <button 
@@ -444,6 +610,70 @@ const Settings: React.FC<SettingsProps> = ({ kaggleCreds, onConnectKaggle, llmKe
                         {isKaggleSaved ? <><Check size={16} /> Connected</> : "Save Credentials"}
                     </button>
                 </div>
+            </div>
+        </div>
+
+        {/* --- Data Management Section --- */}
+        <div className="space-y-4">
+            <h2 className="text-lg font-semibold text-text flex items-center gap-2">
+                <Database size={20} className="text-textMuted" />
+                Data Management
+            </h2>
+            <div className="bg-surface rounded-xl border border-surfaceHighlight overflow-hidden p-6 flex items-center justify-between">
+                <div>
+                    <h3 className="text-sm font-medium text-text">Workspace Data</h3>
+                    <p className="text-xs text-textMuted mt-1">Export your competitions, agents, and memory to JSON.</p>
+                </div>
+                <div className="flex items-center gap-3">
+                    <input 
+                        type="file" 
+                        ref={fileInputRef} 
+                        onChange={handleImportFile} 
+                        accept=".json" 
+                        className="hidden" 
+                    />
+                    <button 
+                        onClick={handleImportClick}
+                        className="px-4 py-2 bg-surfaceHighlight hover:bg-surfaceHighlight/80 text-text text-sm font-medium rounded-lg flex items-center gap-2 transition-colors"
+                        disabled={importStatus === 'importing'}
+                    >
+                        {importStatus === 'importing' ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
+                        Import
+                    </button>
+                    <button 
+                        onClick={handleExport}
+                        className="px-4 py-2 bg-surfaceHighlight hover:bg-surfaceHighlight/80 text-text text-sm font-medium rounded-lg flex items-center gap-2 transition-colors"
+                        disabled={exportStatus === 'exporting'}
+                    >
+                        {exportStatus === 'exporting' ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+                        Export
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        {/* --- Danger Zone --- */}
+        <div className="space-y-4 pt-6 border-t border-surfaceHighlight">
+            <h2 className="text-lg font-semibold text-red-400 flex items-center gap-2">
+                <LogOut size={20} />
+                Danger Zone
+            </h2>
+            <div className="bg-red-900/10 rounded-xl border border-red-500/30 overflow-hidden p-6 flex items-center justify-between">
+                <div>
+                    <h3 className="text-sm font-medium text-text">Reset Workspace</h3>
+                    <p className="text-xs text-textMuted mt-1">Permanently delete all local data, including competitions, messages, and API keys.</p>
+                </div>
+                <button 
+                    onClick={() => {
+                        if (window.confirm("Are you absolutely sure? This will wipe all local data and cannot be undone.")) {
+                            onResetWorkspace && onResetWorkspace();
+                        }
+                    }}
+                    className="px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 border border-red-500/30 text-sm font-medium rounded-lg flex items-center gap-2 transition-colors"
+                >
+                    <LogOut size={16} />
+                    Reset Everything
+                </button>
             </div>
         </div>
 

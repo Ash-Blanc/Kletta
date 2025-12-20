@@ -5,6 +5,8 @@ const PROVIDER_LABELS: Record<AIProvider, string> = {
   gemini: 'Google Gemini',
   openrouter: 'OpenRouter',
   openai: 'OpenAI',
+  cerebras: 'Cerebras',
+  groq: 'Groq',
 };
 
 const withTimeout = async <T>(promise: Promise<T>, timeout = 15000): Promise<T> => {
@@ -119,6 +121,80 @@ const testOpenRouter = async (apiKey?: string) => {
   return 'OpenRouter responded successfully.';
 };
 
+const testCerebras = async (apiKey?: string) => {
+  if (!apiKey) {
+    throw new Error('Missing Cerebras API key.');
+  }
+
+  const response = await withTimeout(
+    fetch('https://api.cerebras.ai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b',
+        messages: [
+          { role: 'system', content: 'You are a health check for Kletta workspace.' },
+          { role: 'user', content: 'Respond with READY if you can see this.' },
+        ],
+        max_tokens: 5,
+      }),
+    })
+  );
+
+  if (!response.ok) {
+    const errDetails = await response.text();
+    throw new Error(`Cerebras error ${response.status}: ${errDetails}`);
+  }
+
+  const data = await response.json();
+  const content = data.choices?.[0]?.message?.content;
+  if (!content) {
+    throw new Error('Cerebras returned an empty response.');
+  }
+
+  return 'Cerebras responded successfully.';
+};
+
+const testGroq = async (apiKey?: string) => {
+  if (!apiKey) {
+    throw new Error('Missing Groq API key.');
+  }
+
+  const response = await withTimeout(
+    fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        messages: [
+          { role: 'system', content: 'You are a health check for Kletta workspace.' },
+          { role: 'user', content: 'Respond with READY if you can see this.' },
+        ],
+        max_tokens: 5,
+      }),
+    })
+  );
+
+  if (!response.ok) {
+    const errDetails = await response.text();
+    throw new Error(`Groq error ${response.status}: ${errDetails}`);
+  }
+
+  const data = await response.json();
+  const content = data.choices?.[0]?.message?.content;
+  if (!content) {
+    throw new Error('Groq returned an empty response.');
+  }
+
+  return 'Groq responded successfully.';
+};
+
 export const providerLabels = PROVIDER_LABELS;
 
 export const runProviderDiagnostic = async (provider: AIProvider, keys: LLMKeys): Promise<string> => {
@@ -129,6 +205,10 @@ export const runProviderDiagnostic = async (provider: AIProvider, keys: LLMKeys)
       return testOpenRouter(keys.openRouter);
     case 'openai':
       return testOpenAI(keys.openAI);
+    case 'cerebras':
+      return testCerebras(keys.cerebras);
+    case 'groq':
+      return testGroq(keys.groq);
     default:
       throw new Error('Unknown provider');
   }

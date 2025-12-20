@@ -1,6 +1,6 @@
 import { KaggleCredentials, Competition, Resource } from '../types';
 
-const KAGGLE_API_BASE = 'https://www.kaggle.com/api/v1';
+const KAGGLE_API_BASE = '/api/kaggle';
 
 // --- Error Types ---
 
@@ -118,11 +118,16 @@ const mapCompetition = (raw: KaggleCompetitionResponse): Competition => {
     }
   }
 
+  // Construct a robust URL if the API one is missing or relative
+  const url = raw.url 
+    ? (raw.url.startsWith('http') ? raw.url : `https://www.kaggle.com${raw.url}`)
+    : (raw.ref ? `https://www.kaggle.com/c/${raw.ref}` : undefined);
+
   return {
     id: raw.ref || `kaggle-${Date.now()}`,
     name: raw.title || 'Untitled Competition',
     description: raw.description || '',
-    url: raw.url ? `https://www.kaggle.com${raw.url}` : undefined,
+    url,
     tags,
     lastActive,
     status: lastActive === 'Ended' ? 'archived' : 'active',
@@ -143,11 +148,16 @@ const mapDataset = (raw: KaggleDatasetResponse, index: number): Resource => {
     metadata.language = `${mb} MB`;
   }
 
+  // Construct a robust URL for datasets
+  const url = raw.url 
+    ? (raw.url.startsWith('http') ? raw.url : `https://www.kaggle.com${raw.url}`)
+    : (raw.ref ? `https://www.kaggle.com/datasets/${raw.ref}` : undefined);
+
   return {
     id: `kaggle-ds-${Date.now()}-${index}`,
     title: raw.title || 'Untitled Dataset',
     type: 'dataset',
-    url: raw.url ? `https://www.kaggle.com${raw.url}` : undefined,
+    url,
     summary: raw.subtitle || undefined,
     metadata,
   };

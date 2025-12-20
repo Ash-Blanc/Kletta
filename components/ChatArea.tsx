@@ -1,21 +1,38 @@
 import React, { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { Message, AgentType, Competition, LLMKeys } from '../types';
+import { Message, AgentType, Competition, LLMKeys, Resource, Task } from '../types';
 import { Send, User, Bot, Sparkles, MoreHorizontal, LayoutTemplate, ExternalLink } from 'lucide-react';
 import { clsx } from 'clsx';
 import { generateAgentResponse } from '../services/geminiService';
+import { NotebookCell } from './NotebookCell';
 
 interface ChatAreaProps {
   messages: Message[];
   activeCompetition?: Competition;
+  resources: Resource[];
+  tasks: Task[];
   onSendMessage: (msg: Message) => void;
+  onRegisterResource: (res: Omit<Resource, 'id'>) => void;
+  onAddTask: (title: string) => void;
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   llmKeys: LLMKeys;
+  kaggleCreds: KaggleCredentials | null;
 }
 
 const AGENTS_LIST = Object.values(AgentType).filter(type => type !== AgentType.User);
 
-const ChatArea: React.FC<ChatAreaProps> = ({ messages, activeCompetition, onSendMessage, setMessages, llmKeys }) => {
+const ChatArea: React.FC<ChatAreaProps> = ({ 
+    messages, 
+    activeCompetition, 
+    resources,
+    tasks,
+    onSendMessage, 
+    onRegisterResource,
+    onAddTask,
+    setMessages, 
+    llmKeys,
+    kaggleCreds
+}) => {
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [showMentions, setShowMentions] = useState(false);
@@ -103,13 +120,51 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, activeCompetition, onSend
 
     try {
         // Pass llmKeys here to enable fallback mechanism
-        const response = await generateAgentResponse(messages.concat(userMsg), userMsg.content, llmKeys);
+        // Pass activeCompetition, resources, and tasks to inject context into system prompt
+        // Pass kaggleCreds to enable Kaggle API tool calling
+        const response = await generateAgentResponse(
+            messages.concat(userMsg), 
+            userMsg.content, 
+            llmKeys, 
+            activeCompetition,
+            resources,
+            tasks,
+            kaggleCreds
+        );
+
+        let cleanText = response.text;
+
+        // 1. Check for Resource Additions [ADD_RESOURCE: {...}]
+        const resourceRegex = /\[ADD_RESOURCE:\s*({[\s\S]*?})\]/g;
+        let resMatch;
+        while ((resMatch = resourceRegex.exec(response.text)) !== null) {
+            try {
+                const resData = JSON.parse(resMatch[1]);
+                onRegisterResource(resData);
+                // Remove the tag from displayed text
+                cleanText = cleanText.replace(resMatch[0], '');
+            } catch (e) {
+                console.error("Failed to parse agent resource addition:", e);
+            }
+        }
+
+        // 2. Check for Task Additions [ADD_TASK: "..."]
+        const taskRegex = /\[ADD_TASK:\s*"([\s\S]*?)"\]/g;
+        let taskMatch;
+        while ((taskMatch = taskRegex.exec(response.text)) !== null) {
+            try {
+                onAddTask(taskMatch[1]);
+                cleanText = cleanText.replace(taskMatch[0], '');
+            } catch (e) {
+                console.error("Failed to parse agent task addition:", e);
+            }
+        }
 
         const agentMsg: Message = {
         id: (Date.now() + 1).toString(),
         role: 'agent',
         agentType: response.agentType,
-        content: response.text,
+        content: cleanText.trim(),
         timestamp: new Date()
         };
 
@@ -270,19 +325,28 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, activeCompetition, onSend
                       </span>
                   </div>
                 )}
-                <ReactMarkdown 
-                  className="markdown-content space-y-3"
-                  components={{
-                    code: ({node, ...props}) => <code className="bg-black/30 rounded px-1.5 py-0.5 text-xs font-mono text-accent" {...props} />,
-                    pre: ({node, ...props}) => <div className="bg-black/30 rounded-lg p-3 overflow-x-auto my-3 border border-surfaceHighlight/50"><pre {...props} /></div>,
-                    ul: ({node, ...props}) => <ul className="list-disc pl-4 space-y-1 marker:text-textMuted" {...props} />,
-                    ol: ({node, ...props}) => <ol className="list-decimal pl-4 space-y-1 marker:text-textMuted" {...props} />,
-                    a: ({node, ...props}) => <a className="text-accent hover:underline hover:text-accentHover transition-colors" {...props} />,
-                    p: ({node, ...props}) => <p className="leading-relaxed" {...props} />
-                  }}
-                >
-                  {msg.content}
-                </ReactMarkdown>
+                  <div className="markdown-content space-y-3">
+                    <ReactMarkdown 
+                      components={{
+                        code(props) {
+                            const {children, className, node, ...rest} = props;
+                            const match = /language-(\w+)/.exec(className || '');
+                            // If it's a block code (has language or multiline), use NotebookCell
+                            if (match) {
+                                return <NotebookCell code={String(children).replace(/\n$/, '')} language={match[1]} />;
+                            }
+                            return <code className="bg-black/30 rounded px-1.5 py-0.5 text-xs font-mono text-accent" {...rest}>{children}</code>;
+                        },
+                        pre: ({children}) => <>{children}</>,
+                        ul: ({node, ...props}) => <ul className="list-disc pl-4 space-y-1 marker:text-textMuted" {...props} />,
+                        ol: ({node, ...props}) => <ol className="list-decimal pl-4 space-y-1 marker:text-textMuted" {...props} />,
+                        a: ({node, ...props}) => <a className="text-accent hover:underline hover:text-accentHover transition-colors" {...props} />,
+                        p: ({node, ...props}) => <p className="leading-relaxed" {...props} />
+                      }}
+                    >
+                      {msg.content}
+                    </ReactMarkdown>
+                  </div>
               </div>
             </div>
           ))
@@ -338,14 +402,13 @@ const ChatArea: React.FC<ChatAreaProps> = ({ messages, activeCompetition, onSend
             onKeyDown={handleKeyDown}
             placeholder={activeCompetition ? "Ask @scout to analyze rules or @coder to build a baseline..." : "Join a competition to start..."}
             disabled={!activeCompetition}
-            className="w-full bg-transparent text-text p-4 pr-12 resize-none focus:outline-none min-h-[56px] max-h-[200px] disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full bg-transparent text-text py-2 px-4 pr-12 resize-none focus:outline-none min-h-[44px] max-h-[200px] disabled:opacity-50 disabled:cursor-not-allowed"
             rows={1}
-            style={{ minHeight: '3.5rem' }}
           />
           <button 
             onClick={handleSend}
             disabled={!inputValue.trim() || isTyping || !activeCompetition}
-            className="absolute right-2 bottom-2 p-2 text-textMuted hover:text-accent disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="absolute right-2 bottom-1 p-2 text-textMuted hover:text-accent disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             <Send size={18} />
           </button>
