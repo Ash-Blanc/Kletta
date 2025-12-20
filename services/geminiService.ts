@@ -93,9 +93,9 @@ async function callGemini(history: Message[], prompt: string, apiKey: string, co
                     name: "search_kaggle_competitions",
                     description: "Search for Kaggle competitions by keyword or query.",
                     parameters: {
-                        type: "OBJECT",
+                        type: Type.OBJECT,
                         properties: {
-                            query: { type: "STRING", description: "The search query (e.g. 'titanic', 'image classification')." }
+                            query: { type: Type.STRING, description: "The search query (e.g. 'titanic', 'image classification')." }
                         },
                         required: ["query"]
                     }
@@ -104,9 +104,9 @@ async function callGemini(history: Message[], prompt: string, apiKey: string, co
                     name: "search_kaggle_datasets",
                     description: "Search for Kaggle datasets by keyword or query.",
                     parameters: {
-                        type: "OBJECT",
+                        type: Type.OBJECT,
                         properties: {
-                            query: { type: "STRING", description: "The search query (e.g. 'housing prices', 'nlp datasets')." }
+                            query: { type: Type.STRING, description: "The search query (e.g. 'housing prices', 'nlp datasets')." }
                         },
                         required: ["query"]
                     }

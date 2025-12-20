@@ -302,6 +302,36 @@ const App: React.FC = () => {
     }
   };
 
+  const handleDeleteCompetition = async (id: string) => {
+    if (!window.confirm("Are you sure you want to delete this competition and all its data? This cannot be undone.")) {
+      return;
+    }
+
+    try {
+      await storage.deleteCompetition(id);
+      
+      const updatedCompetitions = competitions.filter(c => c.id !== id);
+      setCompetitions(updatedCompetitions);
+
+      if (activeCompetitionId === id) {
+        const nextComp = updatedCompetitions[0]?.id || null;
+        setActiveCompetitionId(nextComp);
+        
+        if (nextComp) {
+          handleSelectCompetition(nextComp);
+        } else {
+          setMessages([]);
+          setResources([]);
+          setTasks([]);
+          setMemory([]);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to delete competition:', err);
+      alert('Failed to delete competition. Please try again.');
+    }
+  };
+
   const handleSendMessage = (newMessage: Message) => {
     setMessages(prev => [...prev, newMessage]);
   };
@@ -535,6 +565,7 @@ const App: React.FC = () => {
               competitions={competitions}
               activeId={activeCompetitionId}
               onSelectCompetition={handleSelectCompetition}
+              onDeleteCompetition={handleDeleteCompetition}
               onCreateCompetition={handleOpenCreateModal}
               activeView={activeView}
               onViewChange={setActiveView}

@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Competition, ViewMode, KaggleCredentials } from '../types';
-import { Trophy, Plus, MessageSquare, Database, Settings, Search, Users, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Trophy, Plus, MessageSquare, Database, Settings, Search, Users, PanelLeftClose, PanelLeftOpen, Trash2 } from 'lucide-react';
 import { clsx } from 'clsx';
 
 interface SidebarLeftProps {
   competitions: Competition[];
   activeId: string | null;
   onSelectCompetition: (id: string) => void;
+  onDeleteCompetition: (id: string) => void;
   onCreateCompetition: () => void;
   activeView: ViewMode;
   onViewChange: (view: ViewMode) => void;
@@ -23,6 +24,7 @@ const SidebarLeft: React.FC<SidebarLeftProps> = ({
   competitions, 
   activeId, 
   onSelectCompetition,
+  onDeleteCompetition,
   onCreateCompetition,
   activeView,
   onViewChange,
@@ -139,31 +141,43 @@ const SidebarLeft: React.FC<SidebarLeftProps> = ({
             </div>
           ) : (
             filteredCompetitions.map(comp => (
-              <button
-                key={comp.id}
-                onClick={() => {
-                  onSelectCompetition(comp.id);
-                  onViewChange('chat');
-                }}
-                className={clsx(
-                  "rounded-md transition-all duration-200 group flex items-center cursor-pointer",
-                  isCollapsed 
-                    ? "justify-center w-10 h-10 mx-auto hover:bg-surfaceHighlight/30" 
-                    : "w-full text-left p-2.5 gap-3 hover:bg-surfaceHighlight/30",
-                  activeId === comp.id ? (isCollapsed ? "bg-surfaceHighlight text-accent" : "bg-surfaceHighlight text-text") : "text-textMuted"
-                )}
-                title={isCollapsed ? comp.name : undefined}
-              >
-                <Trophy size={isCollapsed ? 20 : 16} className={clsx("flex-shrink-0", activeId === comp.id ? "text-accent" : "text-textMuted")} />
-                {!isCollapsed && (
-                    <div className="overflow-hidden">
-                      <div className="font-medium text-sm truncate">{comp.name}</div>
-                      <div className="text-xs text-textMuted/70 truncate flex items-center gap-1">
-                        {comp.tags[0] || 'Active'}
+              <div key={comp.id} className="group relative">
+                <button
+                  onClick={() => {
+                    onSelectCompetition(comp.id);
+                    onViewChange('chat');
+                  }}
+                  className={clsx(
+                    "rounded-md transition-all duration-200 group flex items-center cursor-pointer w-full text-left p-2.5 gap-3 hover:bg-surfaceHighlight/30",
+                    isCollapsed ? "justify-center" : "",
+                    activeId === comp.id ? (isCollapsed ? "bg-surfaceHighlight text-accent" : "bg-surfaceHighlight text-text") : "text-textMuted"
+                  )}
+                  title={isCollapsed ? comp.name : undefined}
+                >
+                  <Trophy size={isCollapsed ? 20 : 16} className={clsx("flex-shrink-0", activeId === comp.id ? "text-accent" : "text-textMuted")} />
+                  {!isCollapsed && (
+                      <div className="overflow-hidden flex-1">
+                        <div className="font-medium text-sm truncate">{comp.name}</div>
+                        <div className="text-xs text-textMuted/70 truncate flex items-center gap-1">
+                          {comp.tags[0] || 'Active'}
+                        </div>
                       </div>
-                    </div>
+                  )}
+                </button>
+                
+                {!isCollapsed && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDeleteCompetition(comp.id);
+                    }}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 p-1.5 text-textMuted hover:text-red-400 hover:bg-red-500/10 rounded transition-all"
+                    title="Delete Competition"
+                  >
+                    <Trash2 size={14} />
+                  </button>
                 )}
-              </button>
+              </div>
             ))
           )}
           {isCollapsed && (

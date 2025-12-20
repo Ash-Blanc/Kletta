@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { Message, AgentType, Competition, LLMKeys, Resource, Task } from '../types';
+import { Message, AgentType, Competition, LLMKeys, Resource, Task, KaggleCredentials } from '../types';
 import { Send, User, Bot, Sparkles, MoreHorizontal, LayoutTemplate, ExternalLink } from 'lucide-react';
 import { clsx } from 'clsx';
 import { generateAgentResponse } from '../services/geminiService';
