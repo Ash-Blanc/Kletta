@@ -226,7 +226,7 @@ async function executeStructuredQuery(
             run: async (k: string) => {
                 const ai = new GoogleGenAI({ apiKey: k });
                 const response = await ai.models.generateContent({
-                    model: "gemini-3-flash-preview",
+                    model: "gemini-2.0-flash-exp",
                     contents: geminiPrompt,
                     config: { responseMimeType: "application/json" } // Don't enforce schema strictly to allow partial recovery
                 });
