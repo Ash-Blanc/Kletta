@@ -198,8 +198,8 @@ const SidebarLeft: React.FC<SidebarLeftProps> = ({
         <div className="h-px bg-surfaceHighlight w-full mb-4"></div>
         <div className="space-y-1 w-full">
           {[
-              { id: 'memory', label: 'Comp Memory', icon: Database },
-              { id: 'agents', label: 'Team Agents', icon: Users },
+              { id: 'memory', label: 'Memory', icon: Database },
+              { id: 'agents', label: 'Agents', icon: Users },
               { id: 'settings', label: 'Settings', icon: Settings, hasStatus: true },
           ].map((item) => (
               <button 

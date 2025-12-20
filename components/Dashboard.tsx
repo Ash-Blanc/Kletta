@@ -27,7 +27,7 @@ const MemoryViewer: React.FC<DashboardProps> = ({ competition, memory = [] }) =>
         <div>
           <h1 className="text-2xl font-serif font-bold text-text mb-2 flex items-center gap-3">
              <Database className="text-accent" />
-             Competition Memory
+             Memory
           </h1>
           <p className="text-textMuted">Live view of Kletta's persistent state for <span className="text-text font-medium">{competition.name}</span>.</p>
         </div>

@@ -1,6 +1,7 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Message, AgentType, Resource, LLMKeys, AIProvider, SearchFilters, Competition, Task, KaggleCredentials } from '../types';
 import { searchCompetitions, searchDatasets } from './kaggleService';
+import { BASE_KLETTA_INSTRUCTION, DEFAULT_AGENT_PROMPTS } from './agentPrompts';
 
 const SYSTEM_INSTRUCTION = `
 You are "Kletta", a sophisticated AI agent workspace designed to win Kaggle competitions.
@@ -29,6 +30,8 @@ WORKSPACE CONTROL:
 You can autonomously update the user's workspace by including these blocks at the END of your message:
 - To add a resource: [ADD_RESOURCE: {"title": "Paper/Repo Title", "type": "paper|library|dataset", "url": "https://...", "summary": "Why it matters"}]
 - To add a task: [ADD_TASK: "Specific objective description"]
+- To remove a task: [REMOVE_TASK: "Specific objective description"]
+- To reset the entire plan: [CLEAR_PLAN]
 
 MEMORY & CONTEXT:
 - You remember the competition details, current CV scores, and tried techniques.
@@ -73,7 +76,7 @@ Use this context to answer questions immediately. Do NOT ask the user for inform
 
 // --- Providers ---
 
-async function callGemini(history: Message[], prompt: string, apiKey: string, competition?: Competition, resources: Resource[] = [], tasks: Task[] = [], kaggleCreds?: KaggleCredentials | null): Promise<string> {
+async function callGemini(history: Message[], prompt: string, apiKey: string, competition?: Competition, resources: Resource[] = [], tasks: Task[] = [], kaggleCreds?: KaggleCredentials | null, baseSystem: string = SYSTEM_INSTRUCTION): Promise<string> {
     const ai = new GoogleGenAI({ apiKey });
     // Using flash for general chat to avoid limits, user can tweak in future
     const model = 'gemini-2.0-flash-exp'; 
@@ -83,7 +86,7 @@ async function callGemini(history: Message[], prompt: string, apiKey: string, co
       parts: [{ text: msg.content }],
     }));
 
-    const systemInstruction = buildSystemPrompt(SYSTEM_INSTRUCTION, competition, resources, tasks);
+    const systemInstruction = buildSystemPrompt(baseSystem, competition, resources, tasks);
 
     const tools = [
         { googleSearch: {} },
@@ -163,8 +166,8 @@ async function callGemini(history: Message[], prompt: string, apiKey: string, co
     return result.text;
 }
 
-async function callOpenAI(history: Message[], prompt: string, apiKey: string, competition?: Competition, resources: Resource[] = [], tasks: Task[] = []): Promise<string> {
-    const systemInstruction = buildSystemPrompt(SYSTEM_INSTRUCTION, competition, resources, tasks);
+async function callOpenAI(history: Message[], prompt: string, apiKey: string, competition?: Competition, resources: Resource[] = [], tasks: Task[] = [], kaggleCreds?: KaggleCredentials | null, baseSystem: string = SYSTEM_INSTRUCTION): Promise<string> {
+    const systemInstruction = buildSystemPrompt(baseSystem, competition, resources, tasks);
     const messages = [
         { role: 'system', content: systemInstruction },
         ...history.slice(-10).map(msg => ({
@@ -196,8 +199,8 @@ async function callOpenAI(history: Message[], prompt: string, apiKey: string, co
     return data.choices[0].message.content;
 }
 
-async function callOpenRouter(history: Message[], prompt: string, apiKey: string, competition?: Competition, resources: Resource[] = [], tasks: Task[] = []): Promise<string> {
-    const systemInstruction = buildSystemPrompt(SYSTEM_INSTRUCTION, competition, resources, tasks);
+async function callOpenRouter(history: Message[], prompt: string, apiKey: string, competition?: Competition, resources: Resource[] = [], tasks: Task[] = [], kaggleCreds?: KaggleCredentials | null, baseSystem: string = SYSTEM_INSTRUCTION): Promise<string> {
+    const systemInstruction = buildSystemPrompt(baseSystem, competition, resources, tasks);
     const messages = [
         { role: 'system', content: systemInstruction },
         ...history.slice(-10).map(msg => ({
@@ -230,8 +233,8 @@ async function callOpenRouter(history: Message[], prompt: string, apiKey: string
     return data.choices[0].message.content;
 }
 
-async function callCerebras(history: Message[], prompt: string, apiKey: string, competition?: Competition, resources: Resource[] = [], tasks: Task[] = []): Promise<string> {
-    const systemInstruction = buildSystemPrompt(SYSTEM_INSTRUCTION, competition, resources, tasks);
+async function callCerebras(history: Message[], prompt: string, apiKey: string, competition?: Competition, resources: Resource[] = [], tasks: Task[] = [], kaggleCreds?: KaggleCredentials | null, baseSystem: string = SYSTEM_INSTRUCTION): Promise<string> {
+    const systemInstruction = buildSystemPrompt(baseSystem, competition, resources, tasks);
     const messages = [
         { role: 'system', content: systemInstruction },
         ...history.slice(-10).map(msg => ({
@@ -263,8 +266,8 @@ async function callCerebras(history: Message[], prompt: string, apiKey: string, 
     return data.choices[0].message.content;
 }
 
-async function callGroq(history: Message[], prompt: string, apiKey: string, competition?: Competition, resources: Resource[] = [], tasks: Task[] = []): Promise<string> {
-    const systemInstruction = buildSystemPrompt(SYSTEM_INSTRUCTION, competition, resources, tasks);
+async function callGroq(history: Message[], prompt: string, apiKey: string, competition?: Competition, resources: Resource[] = [], tasks: Task[] = [], kaggleCreds?: KaggleCredentials | null, baseSystem: string = SYSTEM_INSTRUCTION): Promise<string> {
+    const systemInstruction = buildSystemPrompt(baseSystem, competition, resources, tasks);
     const messages = [
         { role: 'system', content: systemInstruction },
         ...history.slice(-10).map(msg => ({
@@ -311,6 +314,10 @@ export const generateAgentResponse = async (history: Message[], userPrompt: stri
       }
     }
 
+    // 2. Lookup Configuration
+    const activeAgentType = targetAgent || AgentType.Strategist;
+    const agentConfig = keys?.agentConfigs?.[activeAgentType];
+
     let effectivePrompt = userPrompt;
     if (targetAgent) {
       effectivePrompt = `[SYSTEM: The user has explicitly summoned the ${targetAgent} agent. Switch to this persona immediately.]\n\n${userPrompt}`;
@@ -319,10 +326,10 @@ export const generateAgentResponse = async (history: Message[], userPrompt: stri
     let text = "";
     const errors: string[] = [];
 
-    // 2. Chain of Responsibility (Prioritized)
+    // 3. Chain of Responsibility (Prioritized)
     
-    // Define all providers
-    const providers = [
+    // Define all base providers
+    const allProviders = [
         { id: 'gemini' as AIProvider, func: callGemini, key: keys?.gemini },
         { id: 'openrouter' as AIProvider, func: callOpenRouter, key: keys?.openRouter },
         { id: 'openai' as AIProvider, func: callOpenAI, key: keys?.openAI },
@@ -330,20 +337,44 @@ export const generateAgentResponse = async (history: Message[], userPrompt: stri
         { id: 'groq' as AIProvider, func: callGroq, key: keys?.groq }
     ];
 
-    // Sort: Preferred provider first, then others
-    const preferred = keys?.provider || 'gemini';
-    const sortedProviders = providers.sort((a, b) => {
-        if (a.id === preferred) return -1;
-        if (b.id === preferred) return 1;
-        return 0;
+    // Determine Provider Order
+    let providerOrder: AIProvider[] = [];
+    const PROVIDERS: AIProvider[] = ['gemini', 'openrouter', 'openai', 'cerebras', 'groq'];
+    
+    if (agentConfig?.preferredProvider) {
+        providerOrder.push(agentConfig.preferredProvider);
+        if (agentConfig.fallbackProviders && agentConfig.fallbackProviders.length > 0) {
+            // Add explicitly configured fallbacks
+            agentConfig.fallbackProviders.forEach(p => {
+                if (!providerOrder.includes(p)) providerOrder.push(p);
+            });
+        }
+    } else {
+        providerOrder.push(keys?.provider || 'gemini');
+    }
+
+    // Fill in remaining providers to ensure robustness (global chain)
+    PROVIDERS.forEach(p => {
+        if (!providerOrder.includes(p)) providerOrder.push(p);
     });
+
+    const sortedProviders = providerOrder
+        .map(id => allProviders.find(ap => ap.id === id))
+        .filter((p): p is typeof allProviders[0] => !!p);
+
+    // 4. Construct Final System Prompt
+    // Priority: Custom Prompt > Type Default Prompt > Global Instruction
+    const typePrompt = DEFAULT_AGENT_PROMPTS[activeAgentType] || "";
+    const specificInstruction = agentConfig?.customPrompt || typePrompt;
+    const finalBaseSystem = `${BASE_KLETTA_INSTRUCTION}\n${specificInstruction}`;
 
     // Execute in order
     for (const provider of sortedProviders) {
         if (provider.key && !text) {
             try {
-                // console.log(`Attempting ${provider.id}...`);
-                text = await provider.func(history, effectivePrompt, provider.key, competition, resources, tasks, kaggleCreds);
+                // We need to pass the custom baseSystem down
+                // Modifying provider functions to accept baseSystem
+                text = await provider.func(history, effectivePrompt, provider.key, competition, resources, tasks, kaggleCreds, finalBaseSystem);
             } catch (e: any) {
                 console.warn(`${provider.id} Failed:`, e);
                 errors.push(`${provider.id}: ${e.message}`);

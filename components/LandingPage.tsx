@@ -1,6 +1,10 @@
 import React, { useState } from 'react';
 import { LLMKeys, AIProvider } from '../types';
-import { Bot, ArrowRight, Zap, Shield, Cpu, ChevronLeft, ExternalLink, Hexagon, Sparkles } from 'lucide-react';
+import { 
+    Bot, ArrowRight, Zap, Shield, Cpu, ChevronLeft, 
+    ExternalLink, Hexagon, Sparkles, Code, Globe, 
+    Database, Terminal, Layout, Search, Layers 
+} from 'lucide-react';
 import { clsx } from 'clsx';
 
 interface LandingPageProps {
@@ -12,6 +16,30 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
   const [apiKey, setApiKey] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
+  const [activeFeature, setActiveFeature] = useState(0);
+
+  const features = [
+    {
+        title: "Multi-Agent Swarm",
+        description: "Scouts, Researchers, and Coders working in parallel to solve your competition.",
+        icon: <Layers className="text-emerald-400" size={20} />
+    },
+    {
+        title: "Official Kaggle API",
+        description: "Direct integration for dataset discovery and competition tracking.",
+        icon: <Database className="text-blue-400" size={20} />
+    },
+    {
+        title: "Runnable Notebooks",
+        description: "Execute Python code blocks directly in your chat using Pyodide WASM.",
+        icon: <Terminal className="text-purple-400" size={20} />
+    },
+    {
+        title: "Persistent Memory",
+        description: "Powered by Letta infrastructure to remember every experiment and insight.",
+        icon: <Hexagon className="text-amber-400" size={20} />
+    }
+  ];
 
   const handleStart = (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,7 +52,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
             provider: provider,
             gemini: provider === 'gemini' ? apiKey : '',
             openRouter: provider === 'openrouter' ? apiKey : '',
-            openAI: provider === 'openai' ? apiKey : ''
+            openAI: provider === 'openai' ? apiKey : '',
+            cerebras: provider === 'cerebras' ? apiKey : '',
+            groq: provider === 'groq' ? apiKey : ''
         };
         onGetStarted(keys);
     }, 800);
@@ -35,6 +65,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
       case 'gemini': return 'https://aistudio.google.com/app/apikey';
       case 'openai': return 'https://platform.openai.com/api-keys';
       case 'openrouter': return 'https://openrouter.ai/keys';
+      case 'cerebras': return 'https://inference.cerebras.ai/';
+      case 'groq': return 'https://console.groq.com/keys';
       default: return '#';
     }
   };
@@ -116,9 +148,24 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
                         Activate AI
                         <ArrowRight className="w-5 h-5 transition-transform group-hover:translate-x-1" />
                     </button>
-                    <div className="text-sm text-white/40 font-medium">
-                        Launch Workspace
+                    <div className="text-sm text-white/40 font-medium cursor-default">
+                        v2.5.0-stable
                     </div>
+                </div>
+
+                {/* Feature Mini-Grid */}
+                <div className="mt-16 grid grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-500">
+                    {features.slice(0, 2).map((f, i) => (
+                        <div key={i} className="group/feat flex flex-col gap-3 p-4 rounded-2xl border border-white/5 bg-white/[0.02] hover:bg-white/[0.05] transition-all">
+                            <div className="w-10 h-10 rounded-lg bg-white/5 flex items-center justify-center group-hover/feat:scale-110 transition-transform">
+                                {f.icon}
+                            </div>
+                            <div>
+                                <h4 className="text-sm font-semibold text-white/90">{f.title}</h4>
+                                <p className="text-xs text-white/40 leading-relaxed mt-1">{f.description}</p>
+                            </div>
+                        </div>
+                    ))}
                 </div>
             </div>
 
@@ -140,10 +187,12 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
                             >
                                 <ChevronLeft size={14} /> Return
                             </button>
-                            <div className="flex bg-black/50 rounded-lg p-1 gap-1 border border-white/5">
-                                <button type="button" onClick={() => setProvider('gemini')} className={clsx("px-3 py-1.5 rounded-md text-[10px] uppercase font-bold tracking-wide transition-all", provider === 'gemini' ? "bg-emerald-600 text-white shadow-sm" : "text-white/40 hover:text-white")} title="Google Gemini">Gemini</button>
-                                <button type="button" onClick={() => setProvider('openrouter')} className={clsx("px-3 py-1.5 rounded-md text-[10px] uppercase font-bold tracking-wide transition-all", provider === 'openrouter' ? "bg-purple-600 text-white shadow-sm" : "text-white/40 hover:text-white")} title="OpenRouter">Router</button>
-                                <button type="button" onClick={() => setProvider('openai')} className={clsx("px-3 py-1.5 rounded-md text-[10px] uppercase font-bold tracking-wide transition-all", provider === 'openai' ? "bg-blue-600 text-white shadow-sm" : "text-white/40 hover:text-white")} title="OpenAI">OpenAI</button>
+                            <div className="flex bg-black/50 rounded-lg p-1 gap-1 border border-white/5 overflow-x-auto no-scrollbar max-w-[240px]">
+                                <button type="button" onClick={() => setProvider('gemini')} className={clsx("px-3 py-1.5 rounded-md text-[10px] uppercase font-bold tracking-wide transition-all whitespace-nowrap", provider === 'gemini' ? "bg-emerald-600 text-white shadow-sm" : "text-white/40 hover:text-white")} title="Google Gemini">Gemini</button>
+                                <button type="button" onClick={() => setProvider('openrouter')} className={clsx("px-3 py-1.5 rounded-md text-[10px] uppercase font-bold tracking-wide transition-all whitespace-nowrap", provider === 'openrouter' ? "bg-purple-600 text-white shadow-sm" : "text-white/40 hover:text-white")} title="OpenRouter">Router</button>
+                                <button type="button" onClick={() => setProvider('openai')} className={clsx("px-3 py-1.5 rounded-md text-[10px] uppercase font-bold tracking-wide transition-all whitespace-nowrap", provider === 'openai' ? "bg-blue-600 text-white shadow-sm" : "text-white/40 hover:text-white")} title="OpenAI">OpenAI</button>
+                                <button type="button" onClick={() => setProvider('cerebras')} className={clsx("px-3 py-1.5 rounded-md text-[10px] uppercase font-bold tracking-wide transition-all whitespace-nowrap", provider === 'cerebras' ? "bg-blue-500 text-white shadow-sm" : "text-white/40 hover:text-white")} title="Cerebras">Cerebras</button>
+                                <button type="button" onClick={() => setProvider('groq')} className={clsx("px-3 py-1.5 rounded-md text-[10px] uppercase font-bold tracking-wide transition-all whitespace-nowrap", provider === 'groq' ? "bg-orange-600 text-white shadow-sm" : "text-white/40 hover:text-white")} title="Groq">Groq</button>
                             </div>
                         </div>
 
@@ -162,7 +211,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
                                         placeholder={
                                             provider === 'gemini' ? "Gemini API Key (AIza...)" : 
                                             provider === 'openrouter' ? "OpenRouter Key (sk-or...)" : 
-                                            "OpenAI Key (sk-...)"
+                                            provider === 'openai' ? "OpenAI Key (sk-...)" :
+                                            provider === 'cerebras' ? "Cerebras API Key (sk-...)" :
+                                            "Groq API Key (gsk_...)"
                                         }
                                         value={apiKey}
                                         onChange={(e) => setApiKey(e.target.value)}
@@ -210,6 +261,25 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
 
         {/* Right Column: 3D Visual */}
         <div className="flex-1 hidden lg:flex items-center justify-center relative min-h-[600px] w-full animate-in fade-in slide-in-from-right-8 duration-1000 delay-200">
+             
+             {/* Collaborative Agents Ticker */}
+             <div className="absolute top-0 right-0 left-0 flex justify-center gap-4 pointer-events-none overflow-hidden py-10 opacity-40">
+                <div className="flex gap-8 animate-marquee whitespace-nowrap">
+                    {['@scout', '@researcher', '@coder', '@strategist', '@analyst', '@ensemble'].map((tag) => (
+                        <span key={tag} className="text-xs font-mono font-bold tracking-widest text-emerald-400 uppercase">
+                            {tag}
+                        </span>
+                    ))}
+                </div>
+                <div className="flex gap-8 animate-marquee whitespace-nowrap" aria-hidden="true">
+                    {['@scout', '@researcher', '@coder', '@strategist', '@analyst', '@ensemble'].map((tag) => (
+                        <span key={tag} className="text-xs font-mono font-bold tracking-widest text-emerald-400 uppercase">
+                            {tag}
+                        </span>
+                    ))}
+                </div>
+             </div>
+
              {/* 3D Structure - Emerald Crystal */}
              <div className="relative w-[500px] h-[500px] perspective-[1000px] flex items-center justify-center">
                 
@@ -260,10 +330,18 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
           0%, 100% { opacity: 0.4; }
           50% { opacity: 0.2; }
         }
+        @keyframes marquee {
+          0% { transform: translateX(0); }
+          100% { transform: translateX(-50%); }
+        }
         .animate-float { animation: float 8s ease-in-out infinite; }
         .animate-spin-slow { animation: spin-slow 30s linear infinite; }
         .animate-spin-slow-reverse { animation: spin-slow-reverse 40s linear infinite; }
         .animate-pulse-slow { animation: pulse-slow 5s ease-in-out infinite; }
+        .animate-marquee { animation: marquee 20s linear infinite; }
+        
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
       `}</style>
     </div>
   );

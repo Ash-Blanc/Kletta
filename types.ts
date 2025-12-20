@@ -16,6 +16,13 @@ export interface KaggleCredentials {
 
 export type AIProvider = 'gemini' | 'openrouter' | 'openai' | 'cerebras' | 'groq';
 
+export interface AgentConfig {
+  agentType: AgentType;
+  customPrompt?: string;
+  preferredProvider?: AIProvider;
+  fallbackProviders?: AIProvider[];
+}
+
 export interface LLMKeys {
   provider: AIProvider;
   gemini?: string;
@@ -23,6 +30,7 @@ export interface LLMKeys {
   openAI?: string;
   cerebras?: string;
   groq?: string;
+  agentConfigs?: Record<string, AgentConfig>;
 }
 
 export interface Message {

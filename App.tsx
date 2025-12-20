@@ -400,6 +400,14 @@ const App: React.FC = () => {
     setTasks(prev => prev.filter(t => t.id !== id));
   };
 
+  const handleRemoveTaskByTitle = (title: string) => {
+    setTasks(prev => prev.filter(t => t.title.toLowerCase() !== title.toLowerCase()));
+  };
+
+  const handleClearTasks = () => {
+    setTasks([]);
+  };
+
   const handleDeleteResource = (id: string) => {
     setResources(prev => prev.filter(r => r.id !== id));
   };
@@ -531,6 +539,17 @@ const App: React.FC = () => {
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background text-text relative">
       
+      {/* Mobile Sidebar Overlays (Backdrops) */}
+      {(leftSidebarOpen || rightSidebarOpen) && (
+        <div 
+          className="md:hidden fixed inset-0 z-30 bg-black/60 backdrop-blur-sm transition-opacity animate-in fade-in"
+          onClick={() => {
+            setLeftSidebarOpen(false);
+            setRightSidebarOpen(false);
+          }}
+        />
+      )}
+
       {/* Left Sidebar Toggle - Mobile Only */}
       <button 
         onClick={() => setLeftSidebarOpen(!leftSidebarOpen)}
@@ -552,15 +571,14 @@ const App: React.FC = () => {
 
       {/* Left Sidebar */}
       <div className={clsx(
-        "fixed inset-y-0 left-0 z-40 h-full bg-surface border-r border-surfaceHighlight transition-all duration-300 ease-in-out shadow-xl md:shadow-none",
-        // Mobile: fixed off-canvas
+        "fixed inset-y-0 left-0 z-40 h-full bg-surface border-r border-surfaceHighlight transition-all duration-300 ease-in-out shadow-2xl",
+        // Mobile behavior
         leftSidebarOpen ? "translate-x-0" : "-translate-x-full",
-        // Desktop: relative flow with width transition
-        "md:static md:transform-none",
-        // Desktop width: Expanded vs Mini (w-20 is approx 80px)
+        // Desktop behavior: mini vs full
+        "md:static md:translate-x-0 md:shadow-none",
         leftSidebarOpen ? "md:w-64" : "md:w-20"
       )}>
-        <div className="w-full h-full overflow-hidden">
+        <div className={clsx("h-full transition-all duration-300", leftSidebarOpen ? "w-64" : "w-full md:w-20")}>
             <SidebarLeft 
               competitions={competitions}
               activeId={activeCompetitionId}
@@ -590,6 +608,8 @@ const App: React.FC = () => {
             tasks={tasks}
             onRegisterResource={handleRegisterResource}
             onAddTask={handleAddTask}
+            onRemoveTaskByTitle={handleRemoveTaskByTitle}
+            onClearTasks={handleClearTasks}
             setMessages={setMessages}
             llmKeys={llmKeys}
             kaggleCreds={kaggleCreds}
@@ -599,7 +619,10 @@ const App: React.FC = () => {
           <MemoryViewer competition={activeCompetition} memory={memory} />
         )}
         {activeView === 'agents' && (
-          <AgentsTeam />
+          <AgentsTeam 
+            llmKeys={llmKeys}
+            onUpdateLLMKeys={handleUpdateLLMKeys}
+          />
         )}
         {activeView === 'settings' && (
           <Settings 
@@ -614,11 +637,11 @@ const App: React.FC = () => {
 
       {/* Right Sidebar - Context Panel */}
       <div className={clsx(
-        "fixed inset-y-0 right-0 z-40 h-full bg-surface border-l border-surfaceHighlight transition-all duration-300 ease-in-out shadow-xl md:shadow-none overflow-hidden",
-        // Mobile: fixed off-canvas
-        rightSidebarOpen ? "translate-x-0" : "-translate-x-full",
-        // Desktop: static flow
-        "md:static md:transform-none", 
+        "fixed inset-y-0 right-0 z-40 h-full bg-surface border-l border-surfaceHighlight transition-all duration-300 ease-in-out shadow-2xl",
+        // Mobile behavior
+        rightSidebarOpen ? "translate-x-0" : "translate-x-full",
+        // Desktop behavior: static flow
+        "md:static md:translate-x-0 md:shadow-none overflow-hidden", 
         rightSidebarOpen ? "md:w-72" : "md:w-0 md:border-l-0"
       )}>
          <div className="w-72 h-full">

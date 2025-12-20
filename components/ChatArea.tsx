@@ -14,6 +14,8 @@ interface ChatAreaProps {
   onSendMessage: (msg: Message) => void;
   onRegisterResource: (res: Omit<Resource, 'id'>) => void;
   onAddTask: (title: string) => void;
+  onRemoveTaskByTitle: (title: string) => void;
+  onClearTasks: () => void;
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   llmKeys: LLMKeys;
   kaggleCreds: KaggleCredentials | null;
@@ -29,6 +31,8 @@ const ChatArea: React.FC<ChatAreaProps> = ({
     onSendMessage, 
     onRegisterResource,
     onAddTask,
+    onRemoveTaskByTitle,
+    onClearTasks,
     setMessages, 
     llmKeys,
     kaggleCreds
@@ -160,6 +164,24 @@ const ChatArea: React.FC<ChatAreaProps> = ({
             }
         }
 
+        // 3. Check for Task Removals [REMOVE_TASK: "..."]
+        const removeTaskRegex = /\[REMOVE_TASK:\s*"([\s\S]*?)"\]/g;
+        let removeMatch;
+        while ((removeMatch = removeTaskRegex.exec(response.text)) !== null) {
+            try {
+                onRemoveTaskByTitle(removeMatch[1]);
+                cleanText = cleanText.replace(removeMatch[0], '');
+            } catch (e) {
+                console.error("Failed to parse agent task removal:", e);
+            }
+        }
+
+        // 4. Check for Plan Clear [CLEAR_PLAN]
+        if (response.text.includes('[CLEAR_PLAN]')) {
+            onClearTasks();
+            cleanText = cleanText.replace('[CLEAR_PLAN]', '');
+        }
+
         const agentMsg: Message = {
         id: (Date.now() + 1).toString(),
         role: 'agent',
@@ -252,12 +274,12 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   }
 
   return (
-    <div className="flex flex-col h-full bg-background relative">
+    <div className="flex flex-col h-full bg-background relative overflow-hidden">
       {/* Header */}
-      <div className="p-4 border-b border-surfaceHighlight flex items-center justify-between bg-surface/50 backdrop-blur-sm z-10 h-16">
-        <div className="flex items-center gap-3 overflow-hidden">
-           <h1 className="text-base font-semibold text-text truncate">{activeCompetition.name}</h1>
-           <span className="px-2 py-0.5 rounded-full bg-accent/20 text-accent text-[10px] uppercase tracking-wider font-medium flex-shrink-0">Active</span>
+      <div className="p-4 border-b border-surfaceHighlight flex items-center justify-between bg-surface/50 backdrop-blur-sm z-10 h-14 md:h-16 shrink-0">
+        <div className="flex items-center gap-2 md:gap-3 overflow-hidden ml-10 md:ml-0">
+           <h1 className="text-sm md:text-base font-semibold text-text truncate max-w-[120px] md:max-w-none">{activeCompetition.name}</h1>
+           <span className="hidden xs:inline-block px-2 py-0.5 rounded-full bg-accent/20 text-accent text-[9px] md:text-[10px] uppercase tracking-wider font-medium flex-shrink-0">Active</span>
            {activeCompetition.url && (
              <a 
                href={activeCompetition.url} 
@@ -276,16 +298,17 @@ const ChatArea: React.FC<ChatAreaProps> = ({
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-6">
+      <div className="flex-1 overflow-y-auto p-3 md:p-4 space-y-6 custom-scrollbar">
         {messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full space-y-4 text-center">
-             <div className="w-16 h-16 rounded-full bg-surfaceHighlight/40 flex items-center justify-center">
-               <Bot size={28} className="text-accent" />
+          <div className="flex flex-col items-center justify-center h-full space-y-4 text-center px-6">
+             <div className="w-12 h-12 md:w-16 md:h-16 rounded-full bg-surfaceHighlight/40 flex items-center justify-center">
+               <Bot size={24} className="text-accent md:hidden" />
+               <Bot size={28} className="text-accent hidden md:block" />
              </div>
              <div className="space-y-2">
                <p className="text-sm font-medium text-text">Say hello to your agent team</p>
                <p className="text-xs text-textMuted max-w-sm leading-relaxed">
-                 Use <code className="bg-black/20 px-1 py-0.5 rounded">@scout</code> to summarize rules, <code className="bg-black/20 px-1 py-0.5 rounded">@coder</code> for baseline code, or ask anything about {activeCompetition.name}.
+                 Use <code className="bg-black/20 px-1 py-0.5 rounded">@scout</code> to summarize rules, <code className="bg-black/20 px-1 py-0.5 rounded">@coder</code> for code, or ask anything about {activeCompetition.name}.
                </p>
              </div>
           </div>
@@ -294,25 +317,30 @@ const ChatArea: React.FC<ChatAreaProps> = ({
             <div 
               key={msg.id} 
               className={clsx(
-                "flex gap-4 max-w-3xl mx-auto",
+                "flex gap-3 md:gap-4 max-w-3xl mx-auto w-full",
                 msg.role === 'user' ? "flex-row-reverse" : "flex-row"
               )}
             >
               {/* Avatar */}
               <div className={clsx(
-                "w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-1 shadow-sm",
+                "w-7 h-7 md:w-8 md:h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-1 shadow-sm",
                 msg.role === 'user' ? "bg-surfaceHighlight/80" : "bg-surface border border-surfaceHighlight"
               )}>
                 {msg.role === 'user' ? (
-                  <User size={16} className="text-textMuted" />
+                  <User size={14} className="text-textMuted md:hidden" />
                 ) : (
-                  <Bot size={16} className={getAgentColor(msg.agentType)} />
+                  <Bot size={14} className={clsx(getAgentColor(msg.agentType), "md:hidden")} />
+                )}
+                {msg.role === 'user' ? (
+                  <User size={16} className="text-textMuted hidden md:block" />
+                ) : (
+                  <Bot size={16} className={clsx(getAgentColor(msg.agentType), "hidden md:block")} />
                 )}
               </div>
 
               {/* Content */}
               <div className={clsx(
-                "flex-1 rounded-2xl p-4 text-sm leading-relaxed shadow-sm",
+                "flex-1 rounded-2xl p-3 md:p-4 text-xs md:text-sm leading-relaxed shadow-sm min-w-0 overflow-hidden",
                 msg.role === 'user' ? "bg-surfaceHighlight/40 text-text" : "bg-surface text-textMuted"
               )}>
                 {msg.agentType && msg.role === 'agent' && (
@@ -368,10 +396,10 @@ const ChatArea: React.FC<ChatAreaProps> = ({
       </div>
 
       {/* Input */}
-      <div className="p-4 max-w-3xl mx-auto w-full relative">
+      <div className="p-3 md:p-4 max-w-3xl mx-auto w-full relative shrink-0">
         {/* Mentions Autocomplete Popup */}
         {showMentions && filteredAgents.length > 0 && (
-            <div className="absolute bottom-full left-4 mb-2 w-64 bg-surface border border-surfaceHighlight rounded-lg shadow-xl overflow-hidden z-20 animate-in fade-in slide-in-from-bottom-2">
+            <div className="absolute bottom-full left-3 md:left-4 mb-2 w-full md:w-64 max-w-[calc(100vw-24px)] bg-surface border border-surfaceHighlight rounded-lg shadow-xl overflow-hidden z-20 animate-in fade-in slide-in-from-bottom-2">
                 <div className="px-3 py-2 text-xs font-semibold text-textMuted bg-surfaceHighlight/30 border-b border-surfaceHighlight flex justify-between items-center">
                     <span>Mention an Agent</span>
                     <span className="text-[10px] opacity-70">↑↓ to navigate</span>
