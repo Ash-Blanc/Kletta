@@ -247,6 +247,41 @@ export const fetchDatasetFiles = async (
 };
 
 /**
+ * List kernels (notebooks)
+ */
+export const fetchKernels = async (
+  creds: KaggleCredentials | null,
+  filters: { search?: string; mine?: boolean; competition?: string } = {}
+): Promise<any[]> => {
+  const params: Record<string, string> = {};
+  if (filters.search) params.search = filters.search;
+  if (filters.mine) params.mine = 'true';
+  if (filters.competition) params.competition = filters.competition;
+  
+  return kaggleFetch<any[]>('/kernels/list', creds, params);
+};
+
+/**
+ * Get kernel status
+ */
+export const fetchKernelStatus = async (
+  kernelId: string,
+  creds: KaggleCredentials | null
+): Promise<{ status: string; message: string }> => {
+  return kaggleFetch<{ status: string; message: string }>('/kernels/status', creds, { id: kernelId });
+};
+
+/**
+ * Get kernel output logs
+ */
+export const fetchKernelOutput = async (
+  kernelId: string,
+  creds: KaggleCredentials | null
+): Promise<{ log: string }> => {
+  return kaggleFetch<{ log: string }>('/kernels/output', creds, { id: kernelId });
+};
+
+/**
  * Test Kaggle credentials by making a lightweight API call
  */
 export const testKaggleCredentials = async (creds: KaggleCredentials | null): Promise<string> => {

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Competition, ViewMode, KaggleCredentials } from '../types';
 import { Trophy, Plus, MessageSquare, Database, Settings, Search, Users, PanelLeftClose, PanelLeftOpen, Trash2, Users2 } from 'lucide-react';
+import { KlettaIcon } from './KlettaIcon';
 import { clsx } from 'clsx';
 
 interface SidebarLeftProps {
@@ -62,24 +63,35 @@ const SidebarLeft: React.FC<SidebarLeftProps> = ({
           "flex items-center w-full mb-6", 
           isCollapsed ? "justify-center" : "justify-between pl-2"
       )}>
-        {!isCollapsed && (
+        {!isCollapsed ? (
             <button 
               type="button"
               onClick={onBackToLanding}
               className="group font-serif font-bold text-lg tracking-tight text-text animate-in fade-in slide-in-from-left-2 hover:text-accent transition-all text-left cursor-pointer select-none flex items-center gap-2"
               title="Reset Workspace"
             >
+              <KlettaIcon size={20} className="group-hover:rotate-12 transition-transform duration-500" />
               <span>Kletta</span>
               <span className="opacity-0 group-hover:opacity-100 transition-opacity text-xs font-sans font-normal text-textMuted bg-surfaceHighlight/50 px-1.5 rounded">Reset</span>
             </button>
+        ) : (
+            <button 
+                onClick={onBackToLanding}
+                className="hover:scale-110 hover:rotate-12 transition-all duration-500 cursor-pointer"
+                title="Reset Workspace"
+            >
+                <KlettaIcon size={24} />
+            </button>
         )}
-        <button
-            onClick={onToggle}
-            className="p-2 text-textMuted hover:text-text hover:bg-surfaceHighlight/30 rounded-md transition-colors cursor-pointer"
-            title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
-        >
-            {isCollapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}
-        </button>
+        {!isCollapsed && (
+            <button
+                onClick={onToggle}
+                className="p-2 text-textMuted hover:text-text hover:bg-surfaceHighlight/30 rounded-md transition-colors cursor-pointer"
+                title="Collapse Sidebar"
+            >
+                <PanelLeftClose size={20} />
+            </button>
+        )}
       </div>
 
       {/* Search Bar */}

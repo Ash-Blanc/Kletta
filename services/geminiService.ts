@@ -1,6 +1,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Message, AgentType, Resource, LLMKeys, AIProvider, SearchFilters, Competition, Task, KaggleCredentials, AgentConfig, MCPServer, MemoryBlock } from '../types';
-import { searchCompetitions, searchDatasets, fetchLeaderboard, fetchDatasetFiles } from './kaggleService';
+import { searchCompetitions, searchDatasets, fetchLeaderboard, fetchDatasetFiles, fetchKernels, fetchKernelStatus, fetchKernelOutput } from './kaggleService';
 import { BASE_KLETTA_INSTRUCTION, DEFAULT_AGENT_PROMPTS } from './agentPrompts';
 import { callRemoteMCP } from './mcpService';
 
@@ -137,6 +137,40 @@ async function callGemini(history: Message[], prompt: string, apiKey: string, co
                 },
                 required: ["dataset_id"]
             }
+        },
+        {
+            name: "list_kaggle_kernels",
+            description: "Search for or list Kaggle kernels (notebooks).",
+            parameters: {
+                type: Type.OBJECT,
+                properties: {
+                    search: { type: Type.STRING, description: "Optional: Search query." },
+                    mine: { type: Type.BOOLEAN, description: "Optional: If true, only list your own kernels." },
+                    competition: { type: Type.STRING, description: "Optional: Limit to a specific competition ref." }
+                }
+            }
+        },
+        {
+            name: "get_kernel_status",
+            description: "Check the current execution status of a Kaggle kernel.",
+            parameters: {
+                type: Type.OBJECT,
+                properties: {
+                    kernel_id: { type: Type.STRING, description: "The Kaggle ref of the kernel." }
+                },
+                required: ["kernel_id"]
+            }
+        },
+        {
+            name: "get_kernel_output",
+            description: "Retrieve the output logs (stdout/stderr) from a Kaggle kernel execution.",
+            parameters: {
+                type: Type.OBJECT,
+                properties: {
+                    kernel_id: { type: Type.STRING, description: "The Kaggle ref of the kernel." }
+                },
+                required: ["kernel_id"]
+            }
         }
     ];
 
@@ -246,6 +280,33 @@ async function callGemini(history: Message[], prompt: string, apiKey: string, co
                     functionResponse: {
                         name: "list_dataset_files",
                         response: { content: files }
+                    }
+                });
+            } else if (call.name === "list_kaggle_kernels") {
+                const args = call.args as any;
+                const kernels = await fetchKernels(kaggleCreds || null, args);
+                toolResults.push({
+                    functionResponse: {
+                        name: "list_kaggle_kernels",
+                        response: { content: kernels }
+                    }
+                });
+            } else if (call.name === "get_kernel_status") {
+                const id = (call.args as any).kernel_id;
+                const status = await fetchKernelStatus(id, kaggleCreds || null);
+                toolResults.push({
+                    functionResponse: {
+                        name: "get_kernel_status",
+                        response: { content: status }
+                    }
+                });
+            } else if (call.name === "get_kernel_output") {
+                const id = (call.args as any).kernel_id;
+                const output = await fetchKernelOutput(id, kaggleCreds || null);
+                toolResults.push({
+                    functionResponse: {
+                        name: "get_kernel_output",
+                        response: { content: output }
                     }
                 });
             } else if (call.name.startsWith("package_search_")) {

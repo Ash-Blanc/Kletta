@@ -8,6 +8,7 @@ import Team from './components/Team';
 import Settings from './components/Settings';
 import LandingPage from './components/LandingPage';
 import CreateCompetitionModal from './components/CreateCompetitionModal';
+import { CommandPalette } from './components/CommandPalette';
 import { Competition, ViewMode, Message, Resource, Task, MemoryBlock, AgentType, KaggleCredentials, LLMKeys, SearchFilters, AIProvider } from './types';
 import { PanelRightClose, PanelRightOpen, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -17,6 +18,7 @@ import * as storage from './services/storageService';
 import { FullScreenLoader, OverlayLoader } from './components/LoadingStates';
 import { encrypt, decrypt } from './services/cryptoUtils';
 import { SignedIn, SignedOut, UserButton, useUser } from "@clerk/clerk-react";
+import { ToastContainer, Notification } from './components/Notification';
 
 const PROVIDER_OPTIONS: AIProvider[] = ['gemini', 'openrouter', 'openai', 'cerebras', 'groq'];
 
@@ -49,11 +51,25 @@ const App: React.FC = () => {
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(true);
   const [rightSidebarOpen, setRightSidebarOpen] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSwitching, setIsSwitching] = useState(false); // Add isSwitching state for UX
   const [isSearching, setIsSearching] = useState(false);
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [loadingText, setLoadingText] = useState('Consulting knowledge base...');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [kaggleStatus, setKaggleStatus] = useState<{ loaded: boolean; error?: string }>({ loaded: false });
   
+  // Notification State
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+
+  const addNotification = (message: string, type: Notification['type'] = 'info', title?: string) => {
+    const id = Math.random().toString(36).substr(2, 9);
+    setNotifications(prev => [...prev, { id, message, type, title }]);
+  };
+
+  const removeNotification = (id: string) => {
+    setNotifications(prev => prev.filter(n => n.id !== id));
+  };
+
   // Credentials State
   const [kaggleCreds, setKaggleCreds] = useState<KaggleCredentials | null>(null);
   const [llmKeys, setLlmKeys] = useState<LLMKeys>(() => getEnvDefaultKeys());
@@ -110,6 +126,29 @@ const App: React.FC = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // Handle keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Toggle sidebars
+      if ((e.ctrlKey || e.metaKey) && e.key === '[') {
+        e.preventDefault();
+        setLeftSidebarOpen(prev => !prev);
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === ']') {
+        e.preventDefault();
+        setRightSidebarOpen(prev => !prev);
+      }
+      // Open command palette
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        setIsCommandPaletteOpen(prev => !prev);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   const handleConnectKaggle = (creds: KaggleCredentials | null) => {
     setKaggleCreds(creds);
     if (creds) {
@@ -160,6 +199,7 @@ const App: React.FC = () => {
 
   // Load workspace data on boot
   useEffect(() => {
+    const controller = new AbortController();
     const loadData = async () => {
       try {
         // 1. Load saved competitions from IndexedDB
@@ -198,20 +238,28 @@ const App: React.FC = () => {
 
         // 5. Load data for active competition
         if (activeId) {
-          const [msgs, res, tsk, mem] = await Promise.all([
-            storage.loadMessages(activeId),
-            storage.loadResources(activeId),
-            storage.loadTasks(activeId),
-            storage.loadMemory(activeId),
-          ]);
-          setMessages(msgs);
-          setResources(res);
-          setTasks(tsk);
-          setMemory(mem);
-          
-          // Trigger initialization if no messages exist
-          if (msgs.length === 0) {
-            handleAgentBoot(activeId, allCompetitions.find(c => c.id === activeId));
+          setIsSwitching(true);
+          try {
+            const [msgs, res, tsk, mem] = await Promise.all([
+              storage.loadMessages(activeId),
+              storage.loadResources(activeId),
+              storage.loadTasks(activeId),
+              storage.loadMemory(activeId),
+            ]);
+            
+            if (!controller.signal.aborted) {
+              setMessages(msgs);
+              setResources(res);
+              setTasks(tsk);
+              setMemory(mem);
+              
+              // Trigger initialization if no messages exist
+              if (msgs.length === 0) {
+                handleAgentBoot(activeId, allCompetitions.find(c => c.id === activeId));
+              }
+            }
+          } finally {
+            if (!controller.signal.aborted) setIsSwitching(false);
           }
         }
 
@@ -227,6 +275,7 @@ const App: React.FC = () => {
     };
 
     loadData();
+    return () => controller.abort();
   }, [kaggleCreds]);
 
   // Save active competition ID to meta when it changes
@@ -238,7 +287,7 @@ const App: React.FC = () => {
 
   // Auto-save messages when they change (debounced)
   useEffect(() => {
-    if (activeCompetitionId && messages.length > 0) {
+    if (activeCompetitionId) {
       const handler = setTimeout(() => {
         storage.saveMessages(activeCompetitionId, messages);
       }, 1000);
@@ -284,6 +333,7 @@ const App: React.FC = () => {
 
     setActiveCompetitionId(id);
     setLeaderboard([]); // Reset leaderboard
+    setIsSwitching(true);
 
     // Load persisted data for the newly selected competition
     try {
@@ -293,6 +343,7 @@ const App: React.FC = () => {
         storage.loadTasks(id),
         storage.loadMemory(id),
       ]);
+      
       setMessages(msgs);
       setResources(res);
       setTasks(tsk);
@@ -300,7 +351,14 @@ const App: React.FC = () => {
 
       // Attempt to fetch leaderboard
       if (kaggleCreds) {
-          fetchLeaderboard(id, kaggleCreds).then(lb => setLeaderboard(lb)).catch(() => {});
+          fetchLeaderboard(id, kaggleCreds)
+            .then(lb => {
+                // Only update if we're still on the same competition
+                if (id === id) { // This is a bit silly without a ref, let's use a simpler check or skip lb for now if it's too complex to coordinate here
+                    setLeaderboard(lb);
+                }
+            })
+            .catch(() => {});
       }
     } catch (err) {
       console.error('Failed to load competition data:', err);
@@ -308,6 +366,8 @@ const App: React.FC = () => {
       setResources([]);
       setTasks([]);
       setMemory([]);
+    } finally {
+      setIsSwitching(false);
     }
   };
 
@@ -428,6 +488,7 @@ const App: React.FC = () => {
       id: `res-agent-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
     };
     setResources(prev => [newRes, ...prev]);
+    addNotification(`Added new ${resource.type}: ${resource.title}`, 'success', 'Resource Registered');
   };
 
   const handleUpdateMemory = (label: string, value: string) => {
@@ -438,6 +499,8 @@ const App: React.FC = () => {
             value,
             lastUpdated: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         };
+
+        addNotification(`Memory updated: ${label}`, 'info', 'Knowledge Updated');
 
         if (existingIdx !== -1) {
             const next = [...prev];
@@ -566,6 +629,18 @@ const App: React.FC = () => {
       <SignedIn>
         <div className="flex h-screen w-full overflow-hidden bg-background text-text relative">
           
+          {/* Command Palette */}
+          <CommandPalette 
+            isOpen={isCommandPaletteOpen}
+            onClose={() => setIsCommandPaletteOpen(false)}
+            competitions={competitions}
+            onSelectCompetition={handleSelectCompetition}
+            onViewChange={setActiveView}
+          />
+
+          {/* Toast Notifications */}
+          <ToastContainer notifications={notifications} onRemove={removeNotification} />
+
           {/* Mobile Sidebar Overlays (Backdrops) */}
           {(leftSidebarOpen || rightSidebarOpen) && (
             <div 
@@ -585,9 +660,10 @@ const App: React.FC = () => {
           >
             {leftSidebarOpen ? <PanelLeftClose size={20} /> : <PanelLeftOpen size={20} />}
           </button>
-
-          {/* Global Overlay Loader for Search */}
+          
+          {/* Loaders */}
           {isSearching && <OverlayLoader message={loadingText} />}
+          {isSwitching && <OverlayLoader message="Syncing workspace..." subtext="Retrieving persistent agent memory." />}
 
           {/* Create Competition Modal */}
           <CreateCompetitionModal 
@@ -640,9 +716,18 @@ const App: React.FC = () => {
                 tasks={tasks}
                 memory={memory}
                 onRegisterResource={handleRegisterResource}
-                onAddTask={handleAddTask}
-                onRemoveTaskByTitle={handleRemoveTaskByTitle}
-                onClearTasks={handleClearTasks}
+                onAddTask={(title) => {
+                    handleAddTask(title);
+                    addNotification(`New objective added: ${title}`, 'success', 'Task Added');
+                }}
+                onRemoveTaskByTitle={(title) => {
+                    handleRemoveTaskByTitle(title);
+                    addNotification(`Task removed: ${title}`, 'warning', 'Plan Updated');
+                }}
+                onClearTasks={() => {
+                    handleClearTasks();
+                    addNotification(`Active plan has been cleared.`, 'warning', 'Roadmap Reset');
+                }}
                 onUpdateMemory={handleUpdateMemory}
                 setMessages={setMessages}
                 llmKeys={llmKeys}

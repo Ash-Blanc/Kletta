@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { LLMKeys, AIProvider } from '../types';
 import { 
-    Bot, ArrowRight, Zap, Shield, Cpu, ChevronLeft, 
+    ArrowRight, Zap, Shield, Cpu, ChevronLeft, 
     ExternalLink, Hexagon, Sparkles, Code, Globe, 
     Database, Terminal, Layout, Search, Layers 
 } from 'lucide-react';
+import { KlettaIcon } from './KlettaIcon';
 import { clsx } from 'clsx';
 import { SignInButton, SignUpButton } from "@clerk/clerk-react";
 
@@ -133,7 +134,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
              <div className="relative flex items-center justify-center scale-110">
                 <div className="absolute w-[400px] h-[400px] bg-emerald-500/10 rounded-full blur-[100px] animate-pulse-slow" />
                 <div className="relative z-20 w-64 h-64 bg-gradient-to-br from-white to-emerald-200 rounded-[60px] rotate-[15deg] animate-float shadow-[0_50px_100px_-20px_rgba(16,185,129,0.5)] flex items-center justify-center border-4 border-white/20 backdrop-blur-3xl">
-                    <Bot size={100} className="text-black -rotate-[15deg] drop-shadow-2xl" />
+                    <KlettaIcon size={100} className="text-black -rotate-[15deg] drop-shadow-2xl" />
                 </div>
                 
                 {/* Visual Elements */}

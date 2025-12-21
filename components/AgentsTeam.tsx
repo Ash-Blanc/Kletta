@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { AgentType, LLMKeys, AIProvider, AgentConfig } from '../types';
-import { Bot, Users, Settings2, Save, X, ChevronRight, AlertCircle } from 'lucide-react';
+import { Users, Settings2, Save, X, ChevronRight, AlertCircle } from 'lucide-react';
+import { KlettaIcon } from './KlettaIcon';
 import { clsx } from 'clsx';
 import { DEFAULT_AGENT_PROMPTS } from '../services/agentPrompts';
 
@@ -125,7 +126,7 @@ const AgentsTeam: React.FC<AgentsTeamProps> = ({ llmKeys, onUpdateLLMKeys }) => 
                         <div className="flex items-start justify-between mb-4">
                             <div className="flex items-center gap-3">
                                 <div className="p-3 rounded-xl bg-surfaceHighlight/30 border border-surfaceHighlight/50">
-                                    <Bot size={28} className={getAgentColor(agent)} />
+                                    <KlettaIcon size={28} className={getAgentColor(agent)} />
                                 </div>
                                 <div>
                                     <h3 className="font-semibold text-text text-lg tracking-tight">{agent}</h3>
@@ -185,7 +186,7 @@ const AgentsTeam: React.FC<AgentsTeamProps> = ({ llmKeys, onUpdateLLMKeys }) => 
               <div className="w-full max-w-2xl bg-surface border border-surfaceHighlight rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
                   <div className="p-6 border-b border-surfaceHighlight flex items-center justify-between bg-surfaceHighlight/10">
                       <div className="flex items-center gap-3">
-                          <Bot size={24} className={getAgentColor(editingAgent)} />
+                          <KlettaIcon size={24} className={getAgentColor(editingAgent)} />
                           <h2 className="text-xl font-bold text-text">Configure @{editingAgent.toLowerCase()}</h2>
                       </div>
                       <button onClick={() => setEditingAgent(null)} className="p-2 text-textMuted hover:text-text rounded-full hover:bg-surfaceHighlight/50">

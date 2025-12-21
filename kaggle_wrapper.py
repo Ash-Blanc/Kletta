@@ -75,6 +75,16 @@ def serialize_leaderboard_entry(entry):
         'rank': getattr(entry, 'rank', 0),
     }
 
+def serialize_kernel(kernel):
+    return {
+        'ref': getattr(kernel, 'ref', ''),
+        'title': getattr(kernel, 'title', ''),
+        'author': getattr(kernel, 'author', ''),
+        'lastRunTime': str(getattr(kernel, 'lastRunTime', '')),
+        'totalVotes': getattr(kernel, 'totalVotes', 0),
+        'status': getattr(kernel, 'status', ''),
+    }
+
 def main():
     try:
         input_data = json.load(sys.stdin)
@@ -118,6 +128,30 @@ def main():
                 return
             files = api.dataset_list_files(id).files
             print(json.dumps([{'name': getattr(f, 'name', ''), 'size': getattr(f, 'size', '')} for f in files]))
+
+        elif command == 'listKernels':
+            search = params.get('search')
+            mine = params.get('mine') == 'true'
+            competition = params.get('competition')
+            kernels = api.kernels_list(search=search, mine=mine, competition=competition)
+            print(json.dumps([serialize_kernel(k) for k in kernels]))
+
+        elif command == 'getKernelStatus':
+            id = params.get('id')
+            if not id:
+                print(json.dumps({'error': 'Kernel ID required'}))
+                return
+            status = api.kernels_status(id)
+            print(json.dumps({'status': getattr(status, 'status', 'unknown'), 'message': getattr(status, 'message', '')}))
+
+        elif command == 'getKernelOutput':
+            id = params.get('id')
+            if not id:
+                print(json.dumps({'error': 'Kernel ID required'}))
+                return
+            output = api.kernels_output(id)
+            # Log typically contains stdout/stderr
+            print(json.dumps({'log': getattr(output, 'log', '')}))
 
         elif command == 'testAuth':
             try:

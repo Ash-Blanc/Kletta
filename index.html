@@ -11,44 +11,61 @@
         theme: {
           extend: {
             colors: {
-              background: '#1a1a1a', // Claude-like dark bg
-              surface: '#2a2a2a',    // Panel bg
-              surfaceHighlight: '#3a3a3a',
-              text: '#e0e0e0',
-              textMuted: '#a0a0a0',
-              accent: '#20beff',     // Kaggle Blue accent
-              accentHover: '#008bb9',
+              background: '#020202', // Deeper black
+              surface: '#0a0a0a',    // Glass base
+              surfaceHighlight: '#161616',
+              text: '#f5f5f5',
+              textMuted: '#737373',
+              accent: '#10b981',     // Emerald (Modern AI feel)
+              accentHover: '#059669',
+              kaggle: '#20beff',     // Classic Kaggle Blue
             },
             fontFamily: {
               sans: ['Inter', 'system-ui', 'sans-serif'],
-              serif: ['Merriweather', 'serif'],
+              mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
             },
+            boxShadow: {
+              'glass': '0 8px 32px 0 rgba(0, 0, 0, 0.8)',
+              'glass-sm': '0 4px 16px 0 rgba(0, 0, 0, 0.4)',
+            }
           },
         },
       };
     </script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Merriweather:wght@300;400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/webp" href="/kletta.webp">
+    <link rel="icon" type="image/svg+xml" href="/kletta.svg">
     <style>
       body {
-        background-color: #1a1a1a;
-        color: #e0e0e0;
+        background-color: #020202;
+        color: #f5f5f5;
         font-family: 'Inter', sans-serif;
+        letter-spacing: -0.011em;
       }
-      /* Custom scrollbar for webkit */
-      ::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
+      
+      .glass-panel {
+        background: rgba(10, 10, 10, 0.7);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.05);
       }
-      ::-webkit-scrollbar-track {
-        background: #1a1a1a; 
+
+      /* Custom scrollbar */
+      .custom-scrollbar::-webkit-scrollbar {
+        width: 5px;
+        height: 5px;
       }
-      ::-webkit-scrollbar-thumb {
-        background: #3a3a3a; 
-        border-radius: 4px;
+      .custom-scrollbar::-webkit-scrollbar-track {
+        background: transparent;
       }
-      ::-webkit-scrollbar-thumb:hover {
-        background: #4a4a4a; 
+      .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: #262626;
+        border-radius: 10px;
       }
+      .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        background: #404040;
+      }
+
       /* Hide scrollbar for Chrome, Safari and Opera */
       .no-scrollbar::-webkit-scrollbar {
         display: none;
